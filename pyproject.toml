@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sfm-reconstruction"
+version = "0.2.0"
+description = "A reproducible incremental Structure-from-Motion pipeline."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.23",
+    "opencv-python>=4.8",
+    "scipy>=1.10",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+evaluation = [
+    "trimesh>=3.23",
+    "rtree>=1.0",
+]
+visualization = ["matplotlib>=3.7"]
+open3d = ["open3d>=0.19"]
+
+[project.scripts]
+sfm-reconstruct = "sfm_reconstruction.cli:main"
+sfm-visualize = "sfm_reconstruction.visualize:main"
+sfm-blender = "sfm_reconstruction.blender_viewer:main"
+sfm-open3d = "sfm_reconstruction.open3d_viewer:main"
+sfm-demo-video = "sfm_reconstruction.demo_video:main"
+sfm-dense-fuse = "sfm_reconstruction.dense_fusion:main"
+sfm-clean-cloud = "sfm_reconstruction.point_cloud_cleanup:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
