@@ -319,26 +319,8 @@ Latest local verification: `34 passed`. The video-renderer helper tests add
 coverage for Open3D demo asset generation without requiring a render window
 during unit tests.
 
-For the full reproducibility check, including output-summary regression, PLY
-vertex counts, demo-video metadata, and the local deliverables archive
-checksum:
 
-```powershell
-.\scripts\run_verification.ps1
-```
-
-See `docs/REPRODUCIBILITY.md` for the pinned package snapshot, archive
-contents, and pre-push checklist.
-
-## Notes For Portfolio Use
-
-This is a geometry reconstruction project, not an inverse-rendering or material
-synthesis project. It is best framed as:
-
-> A classical 3D reconstruction pipeline with production-style packaging,
-> diagnostics, visualization, and quantitative validation.
-
-Planned extensions:
+## Planned extensions:
 
 - Add learned local matching with SuperPoint/LightGlue or LoFTR as an optional
   matching frontend and benchmark it against SIFT/SIFT+AKAZE.
