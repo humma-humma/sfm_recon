@@ -132,6 +132,7 @@ src/sfm_reconstruction/
   dense_fusion.py                Stereo fusion from recovered poses
   point_cloud_cleanup.py         Open3D outlier filtering/downsampling
   reprojection_diagnostics.py    Residual CSVs and image overlays
+  stage3.py                      Stage 3 RGB-D SLAM dataset setup helpers
   open3d_viewer.py               Interactive Open3D viewer
   demo_video.py                  Open3D orbit MP4 renderer
   blender_viewer.py              Blender scene generation
@@ -232,6 +233,55 @@ Each reconstruction output contains:
 - `estimated_points_rich.ply`
 - `summary.json`
 
+## Stage 3 Setup
+
+Stage 3 is the optional RGB-D SLAM trajectory task. The setup helper validates
+the assignment layout and can run a first-pass RGB-D visual odometry baseline:
+
+```powershell
+$env:PYTHONPATH = "src"
+& $python -m sfm_reconstruction.stage3 `
+  --dataset "..\stage3" `
+  --output-dir "outputs\stage3_rgbd_vo_subset500_fullres" `
+  --max-frames 500 `
+  --run-rgbd-odometry `
+  --max-features 1800 `
+  --min-matches 20 `
+  --min-pnp-inliers 8
+```
+
+The baseline reuses the Stage 1/2 matching and geometry utilities: feature
+matching, depth backprojection, PnP, and trajectory export. It writes
+`estimated_camera_trajectory.txt`, `rgbd_odometry_report.csv`, and
+`trajectory_metrics.json` when ground truth is present. The current tuned
+full-resolution 500-frame probe tracks 499 / 499 frame transitions with
+translation RMSE `0.2166`; the 1000-frame probe tracks 999 / 999 with RMSE
+`0.7587`. Full-sequence visual odometry still drifts without loop closure.
+More details are in `docs/STAGE3_SETUP.md`.
+
+Stage 3 loop-edge discovery also supports an optional learned correspondence
+frontend with `--loop-matcher superpoint-lightglue`. It changes only feature
+matching; RGB-D geometric verification and pose-graph optimization remain the
+same. See `docs/LEARNING_BASED_AUGMENTATION.md` for installation and the
+benchmark command.
+
+Full-sequence learned place recognition is available with
+`--loop-candidate-mode dinov2`. DINOv2 retrieval plus local endpoint refinement
+recovers the promoted `4387 -> 32` loop automatically; no second distinct loop
+improved the official result in the current benchmark.
+
+Loop-closure post-processing is available for trajectories where the sequence
+returns near the start:
+
+```powershell
+$env:PYTHONPATH = "src"
+& $python -m sfm_reconstruction.stage3 `
+  --dataset "..\Experiments\Stage_3_Data\stage3" `
+  --output-dir "outputs\stage3_rgbd_vo_full_guarded_scale05_loop_closed_window70_translation" `
+  --input-trajectory "outputs\stage3_rgbd_vo_full_guarded_scale05\estimated_camera_trajectory.txt" `
+  --apply-loop-closure
+```
+
 ## Dense Fusion
 
 Use the estimated cameras as a pose backbone for OpenCV stereo fusion:
@@ -315,15 +365,18 @@ $env:PYTHONDONTWRITEBYTECODE = "1"
 & $python_open3d -m pytest -q -p no:cacheprovider
 ```
 
-Latest local verification: `34 passed`. The video-renderer helper tests add
-coverage for Open3D demo asset generation without requiring a render window
-during unit tests.
+Latest local verification: `48 passed`. The video-renderer helper tests add
+coverage for Open3D demo asset generation without requiring a render window,
+and the Stage 3 tests cover RGB-D layout validation, trajectory IO, odometry
+reports, trajectory metrics, RGB-D rigid-transform helpers, and loop-closure
+post-processing.
 
 
 ## Planned extensions:
 
-- Add learned local matching with SuperPoint/LightGlue or LoFTR as an optional
-  matching frontend and benchmark it against SIFT/SIFT+AKAZE.
+- Continue benchmarking the implemented SuperPoint+LightGlue frontend on boot
+  and wider Stage 3 loop windows; the initial milk and Stage 3 results are
+  documented in `docs/LEARNING_BASED_AUGMENTATION.md`.
 - Add mesh reconstruction from dense fused points using Poisson or ball-pivoting
   surface reconstruction.
 - Export SfM cameras/points to a COLMAP-style layout and train a small 3D

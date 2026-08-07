@@ -88,8 +88,30 @@ The verification runner performs:
 Current expected unit test result:
 
 ```text
-34 passed
+76 passed
 ```
+
+Current focused Stage 3 result:
+
+```text
+outputs/stage3_pose_graph_keyframe_stride8_nfev50/
+official ATE: 3.030521
+internal translation RMSE: 5.242974
+```
+
+Stage 3 visualization and diagnostics may generate additional ignored outputs:
+
+```text
+trajectory_comparison.png
+stage3_scene_sampled.ply
+stage3_scene_dense_voxel.ply
+stage3_scene_gt_pose_dense.ply
+stage3_scene_est_pose_dense.ply
+stage3_scene_est_pose_dense_aligned_to_gt.ply
+```
+
+The GT-aligned scene cloud is diagnostic only and should not be used as a
+GT-free reconstruction result.
 
 ## Deliverables Archive
 

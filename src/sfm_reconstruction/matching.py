@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+import csv
+from dataclasses import asdict, dataclass, replace
 import json
 from pathlib import Path
 
@@ -9,6 +10,8 @@ import numpy as np
 
 from .dataset import Stage1Dataset
 from .geometry import estimate_relative_pose
+from .learned_matching import create_superpoint_lightglue_matcher
+from .place_recognition import create_dinov2_retriever, select_global_loop_candidates
 
 
 @dataclass(frozen=True)
@@ -18,11 +21,28 @@ class MatchingConfig:
     sift_contrast_threshold: float = 0.03
     sift_edge_threshold: float = 10.0
     pair_window: int = 3
+    pair_source: str = "circular"
     ratio_threshold: float = 0.75
     essential_threshold: float = 1.0
     min_inliers: int = 15
     mask_apriltags: bool = False
     apriltag_padding: float = 0.12
+    learned_device: str = "auto"
+    learned_filter_threshold: float = 0.2
+    learned_cycle_filter: bool = False
+    learned_min_cycle_matches: int = 15
+    learned_augment_supplied: bool = False
+    wide_baseline: bool = False
+    wide_pose_only: bool = False
+    wide_retrieval_max_pairs: int = 100
+    wide_min_frame_gap: int = 4
+    wide_min_similarity: float = 0.7
+    wide_min_inlier_ratio: float = 0.25
+    wide_min_spatial_coverage: float = 0.25
+    wide_min_cycle_matches: int = 15
+    wide_max_pairs_per_image: int = 1
+    wide_retrieval_device: str = "auto"
+    wide_retrieval_batch_size: int = 16
 
 
 @dataclass(frozen=True)
@@ -40,6 +60,26 @@ class MatchingSummary:
     correspondences: int
 
 
+@dataclass
+class _LearnedPairResult:
+    pair: tuple[int, int]
+    pair_type: str
+    temporal_gap: int
+    retrieval_similarity: float | None
+    proposal_rank: int | None
+    raw_matches: int
+    essential_inliers: int
+    inlier_ratio: float
+    first_coverage: float
+    second_coverage: float
+    indices: np.ndarray
+    correspondences: np.ndarray
+    cycle_matches: int = 0
+    kept_matches: int = 0
+    accepted: bool = False
+    reject_reason: str = ""
+
+
 def circular_image_pairs(
     image_ids: list[int], pair_window: int
 ) -> list[tuple[int, int]]:
@@ -54,6 +94,19 @@ def circular_image_pairs(
             second_id = image_ids[(index + offset) % len(image_ids)]
             pairs.add(tuple(sorted((first_id, second_id))))
     return sorted(pairs)
+
+
+def matching_image_pairs(
+    dataset: Stage1Dataset, config: MatchingConfig
+) -> list[tuple[int, int]]:
+    if config.pair_source == "circular":
+        return circular_image_pairs(dataset.image_ids, config.pair_window)
+    if config.pair_source == "supplied":
+        pairs = sorted(dataset.correspondence_paths)
+        if not pairs:
+            raise ValueError("pair_source='supplied' requires supplied correspondences")
+        return pairs
+    raise ValueError("pair_source must be 'circular' or 'supplied'")
 
 
 def root_sift(descriptors: np.ndarray) -> np.ndarray:
@@ -149,8 +202,11 @@ def _feature_methods(feature_mode: str) -> tuple[str, ...]:
         return ("akaze",)
     if feature_mode in {"sift+akaze", "akaze+sift"}:
         return ("sift", "akaze")
+    if feature_mode == "superpoint-lightglue":
+        return ("superpoint-lightglue",)
     raise ValueError(
-        "feature_mode must be one of: sift, akaze, sift+akaze"
+        "feature_mode must be one of: sift, akaze, sift+akaze, "
+        "superpoint-lightglue"
     )
 
 
@@ -349,6 +405,434 @@ def _match_feature_sets(
     return np.vstack(correspondences)
 
 
+def _spatial_coverage(
+    points: np.ndarray, image_shape: tuple[int, int], grid_size: int = 4
+) -> float:
+    if len(points) == 0:
+        return 0.0
+    height, width = image_shape
+    points = np.asarray(points, dtype=np.float64)
+    columns = np.clip((points[:, 0] * grid_size / width).astype(int), 0, grid_size - 1)
+    rows = np.clip((points[:, 1] * grid_size / height).astype(int), 0, grid_size - 1)
+    return len(set(zip(rows.tolist(), columns.tolist()))) / float(grid_size**2)
+
+
+def _directed_match_map(
+    result: _LearnedPairResult, source_id: int, target_id: int
+) -> dict[int, int]:
+    first_id, second_id = result.pair
+    if (source_id, target_id) == (first_id, second_id):
+        return dict(zip(result.indices[:, 0], result.indices[:, 1]))
+    if (source_id, target_id) == (second_id, first_id):
+        return dict(zip(result.indices[:, 1], result.indices[:, 0]))
+    raise ValueError("pair does not contain requested direction")
+
+
+def _cycle_supported_mask(
+    result: _LearnedPairResult,
+    results: dict[tuple[int, int], _LearnedPairResult],
+) -> np.ndarray:
+    first_id, second_id = result.pair
+    intermediates = _cycle_intermediates(result, results)
+    supported = np.zeros(len(result.indices), dtype=bool)
+    for intermediate_id in intermediates:
+        first_pair = tuple(sorted((first_id, intermediate_id)))
+        second_pair = tuple(sorted((intermediate_id, second_id)))
+        first_map = _directed_match_map(
+            results[first_pair], first_id, intermediate_id
+        )
+        second_map = _directed_match_map(
+            results[second_pair], intermediate_id, second_id
+        )
+        for match_index, (first_feature, second_feature) in enumerate(result.indices):
+            intermediate_feature = first_map.get(int(first_feature))
+            if (
+                intermediate_feature is not None
+                and second_map.get(intermediate_feature) == int(second_feature)
+            ):
+                supported[match_index] = True
+    return supported
+
+
+def _cycle_intermediates(
+    result: _LearnedPairResult,
+    results: dict[tuple[int, int], _LearnedPairResult],
+) -> set[int]:
+    first_id, second_id = result.pair
+    neighbors: dict[int, set[int]] = {}
+    for pair, other in results.items():
+        if other.reject_reason or len(other.indices) == 0:
+            continue
+        neighbors.setdefault(pair[0], set()).add(pair[1])
+        neighbors.setdefault(pair[1], set()).add(pair[0])
+    return neighbors.get(first_id, set()) & neighbors.get(second_id, set())
+
+
+def _write_pair_diagnostics(
+    path: Path,
+    results: list[_LearnedPairResult],
+    conflicts_by_pair: dict[tuple[int, int], int],
+) -> None:
+    fields = [
+        "first_id", "second_id", "pair_type", "temporal_gap",
+        "retrieval_similarity", "proposal_rank", "raw_matches",
+        "essential_inliers", "inlier_ratio", "first_coverage",
+        "second_coverage", "cycle_matches", "kept_matches",
+        "track_conflicts", "accepted", "reject_reason",
+    ]
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        for result in results:
+            writer.writerow(
+                {
+                    "first_id": result.pair[0],
+                    "second_id": result.pair[1],
+                    "pair_type": result.pair_type,
+                    "temporal_gap": result.temporal_gap,
+                    "retrieval_similarity": (
+                        "" if result.retrieval_similarity is None
+                        else _format_matching_float(result.retrieval_similarity)
+                    ),
+                    "proposal_rank": result.proposal_rank or "",
+                    "raw_matches": result.raw_matches,
+                    "essential_inliers": result.essential_inliers,
+                    "inlier_ratio": _format_matching_float(result.inlier_ratio),
+                    "first_coverage": _format_matching_float(result.first_coverage),
+                    "second_coverage": _format_matching_float(result.second_coverage),
+                    "cycle_matches": result.cycle_matches,
+                    "kept_matches": result.kept_matches,
+                    "track_conflicts": conflicts_by_pair.get(result.pair, 0),
+                    "accepted": int(result.accepted),
+                    "reject_reason": result.reject_reason,
+                }
+            )
+
+
+def _format_matching_float(value: float) -> str:
+    return f"{float(value):.9g}"
+
+
+def _generate_wide_learned_correspondences(
+    dataset: Stage1Dataset,
+    cache_root: Path,
+    correspondence_dir: Path,
+    summary_path: Path,
+    config: MatchingConfig,
+    learned_matcher,
+    features: dict[int, dict],
+    image_shapes: dict[int, tuple[int, int]],
+) -> tuple[Path, MatchingSummary]:
+    wide_correspondence_dir = cache_root / "wide_correspondences"
+    if config.wide_pose_only:
+        wide_correspondence_dir.mkdir(parents=True, exist_ok=True)
+        for path in wide_correspondence_dir.glob("*.txt"):
+            path.unlink()
+    image_ids = dataset.image_ids
+    local_pairs = set(matching_image_pairs(dataset, config))
+    retriever = create_dinov2_retriever(
+        device=config.wide_retrieval_device,
+        batch_size=config.wide_retrieval_batch_size,
+    )
+    descriptors = retriever.describe([dataset.image_paths[image_id] for image_id in image_ids])
+    proposals = select_global_loop_candidates(
+        descriptors,
+        list(range(len(image_ids))),
+        min_separation=config.wide_min_frame_gap,
+        max_candidates=config.wide_retrieval_max_pairs,
+        endpoint_spacing=0,
+        min_similarity=config.wide_min_similarity,
+    )
+    retrieved = {
+        tuple(sorted((image_ids[item.source_index], image_ids[item.target_index]))): item
+        for item in proposals
+    }
+    pairs = sorted(local_pairs | set(retrieved))
+    positions = {image_id: index for index, image_id in enumerate(image_ids)}
+    results: dict[tuple[int, int], _LearnedPairResult] = {}
+
+    for pair_index, pair in enumerate(pairs, start=1):
+        first_id, second_id = pair
+        proposal = retrieved.get(pair)
+        pair_type = "local+retrieved" if pair in local_pairs and proposal else (
+            "local" if pair in local_pairs else "retrieved"
+        )
+        match_indices, first_points, second_points = learned_matcher.match_with_indices(
+            features[first_id], features[second_id]
+        )
+        raw_matches = len(match_indices)
+        inlier_mask = np.zeros(raw_matches, dtype=bool)
+        if raw_matches >= max(5, config.min_inliers):
+            try:
+                relative = estimate_relative_pose(
+                    first_points,
+                    second_points,
+                    dataset.intrinsics,
+                    config.essential_threshold,
+                )
+                inlier_mask = relative.inliers
+            except (RuntimeError, ValueError):
+                pass
+        inlier_indices = match_indices[inlier_mask]
+        inlier_correspondences = np.hstack(
+            (first_points[inlier_mask], second_points[inlier_mask])
+        )
+        inlier_count = len(inlier_indices)
+        inlier_ratio = inlier_count / raw_matches if raw_matches else 0.0
+        first_coverage = _spatial_coverage(
+            first_points[inlier_mask], image_shapes[first_id]
+        )
+        second_coverage = _spatial_coverage(
+            second_points[inlier_mask], image_shapes[second_id]
+        )
+        result = _LearnedPairResult(
+            pair=pair,
+            pair_type=pair_type,
+            temporal_gap=abs(positions[first_id] - positions[second_id]),
+            retrieval_similarity=None if proposal is None else proposal.similarity,
+            proposal_rank=None if proposal is None else proposal.rank,
+            raw_matches=raw_matches,
+            essential_inliers=inlier_count,
+            inlier_ratio=inlier_ratio,
+            first_coverage=first_coverage,
+            second_coverage=second_coverage,
+            indices=inlier_indices,
+            correspondences=inlier_correspondences,
+        )
+        if inlier_count < config.min_inliers:
+            result.reject_reason = "too few essential inliers"
+        elif pair not in local_pairs and inlier_ratio < config.wide_min_inlier_ratio:
+            result.reject_reason = "low essential inlier ratio"
+        elif pair not in local_pairs and min(first_coverage, second_coverage) < config.wide_min_spatial_coverage:
+            result.reject_reason = "low spatial coverage"
+        results[pair] = result
+        if pair_index % 25 == 0 or pair_index == len(pairs):
+            print(f"Geometrically checked {pair_index}/{len(pairs)} learned pairs.")
+
+    for pair, result in results.items():
+        if result.reject_reason:
+            continue
+        if pair not in local_pairs:
+            cycle_mask = _cycle_supported_mask(result, results)
+            result.cycle_matches = int(np.count_nonzero(cycle_mask))
+            if result.cycle_matches < config.wide_min_cycle_matches:
+                result.reject_reason = "insufficient cycle support"
+                continue
+            result.indices = result.indices[cycle_mask]
+            result.correspondences = result.correspondences[cycle_mask]
+        result.kept_matches = len(result.correspondences)
+        if result.kept_matches < config.min_inliers:
+            result.reject_reason = "too few matches after cycle filtering"
+
+    if config.wide_max_pairs_per_image < 1:
+        raise ValueError("wide_max_pairs_per_image must be positive")
+    wide_degree: dict[int, int] = {}
+    wide_results = sorted(
+        (
+            result
+            for pair, result in results.items()
+            if pair not in local_pairs and not result.reject_reason
+        ),
+        key=lambda result: (
+            result.proposal_rank if result.proposal_rank is not None else float("inf"),
+            result.pair,
+        ),
+    )
+    for result in wide_results:
+        first_id, second_id = result.pair
+        if (
+            wide_degree.get(first_id, 0) >= config.wide_max_pairs_per_image
+            or wide_degree.get(second_id, 0) >= config.wide_max_pairs_per_image
+        ):
+            result.reject_reason = "wide endpoint degree limit"
+            continue
+        wide_degree[first_id] = wide_degree.get(first_id, 0) + 1
+        wide_degree[second_id] = wide_degree.get(second_id, 0) + 1
+
+    for result in results.values():
+        if result.reject_reason:
+            continue
+        pair = result.pair
+        output_dir = (
+            wide_correspondence_dir
+            if config.wide_pose_only and pair not in local_pairs
+            else correspondence_dir
+        )
+        np.savetxt(
+            output_dir / f"{pair[0]}_{pair[1]}.txt",
+            result.correspondences,
+            fmt="%.8f",
+        )
+        result.accepted = True
+
+    accepted_results = [result for result in results.values() if result.accepted]
+    correspondence_paths = {
+        result.pair: correspondence_dir / f"{result.pair[0]}_{result.pair[1]}.txt"
+        for result in accepted_results
+        if not config.wide_pose_only or result.pair in local_pairs
+    }
+    from .tracks import build_tracks
+
+    track_result = build_tracks(
+        replace(dataset, correspondence_paths=correspondence_paths),
+        min_observations=2,
+    )
+    _write_pair_diagnostics(
+        cache_root / "pair_diagnostics.csv",
+        list(results.values()),
+        track_result.skipped_conflicts_by_pair,
+    )
+    summary = MatchingSummary(
+        candidate_pairs=len(pairs),
+        accepted_pairs=len(accepted_results),
+        correspondences=sum(result.kept_matches for result in accepted_results),
+    )
+    summary_path.write_text(
+        json.dumps({"config": asdict(config), "summary": asdict(summary)}, indent=2),
+        encoding="utf-8",
+    )
+    return correspondence_dir, summary
+
+
+def _generate_cycle_filtered_learned_correspondences(
+    dataset: Stage1Dataset,
+    cache_root: Path,
+    correspondence_dir: Path,
+    summary_path: Path,
+    config: MatchingConfig,
+    learned_matcher,
+    features: dict[int, dict],
+    image_shapes: dict[int, tuple[int, int]],
+) -> tuple[Path, MatchingSummary]:
+    pairs = matching_image_pairs(dataset, config)
+    positions = {image_id: index for index, image_id in enumerate(dataset.image_ids)}
+    results: dict[tuple[int, int], _LearnedPairResult] = {}
+    for pair_index, pair in enumerate(pairs, start=1):
+        first_id, second_id = pair
+        match_indices, first_points, second_points = learned_matcher.match_with_indices(
+            features[first_id], features[second_id]
+        )
+        raw_matches = len(match_indices)
+        inlier_mask = np.zeros(raw_matches, dtype=bool)
+        if raw_matches >= max(5, config.min_inliers):
+            try:
+                relative = estimate_relative_pose(
+                    first_points,
+                    second_points,
+                    dataset.intrinsics,
+                    config.essential_threshold,
+                )
+                inlier_mask = relative.inliers
+            except (RuntimeError, ValueError):
+                pass
+        inlier_indices = match_indices[inlier_mask]
+        correspondences = np.hstack(
+            (first_points[inlier_mask], second_points[inlier_mask])
+        )
+        inlier_count = len(inlier_indices)
+        result = _LearnedPairResult(
+            pair=pair,
+            pair_type="supplied" if config.pair_source == "supplied" else "local",
+            temporal_gap=abs(positions[first_id] - positions[second_id]),
+            retrieval_similarity=None,
+            proposal_rank=None,
+            raw_matches=raw_matches,
+            essential_inliers=inlier_count,
+            inlier_ratio=inlier_count / raw_matches if raw_matches else 0.0,
+            first_coverage=_spatial_coverage(
+                first_points[inlier_mask], image_shapes[first_id]
+            ),
+            second_coverage=_spatial_coverage(
+                second_points[inlier_mask], image_shapes[second_id]
+            ),
+            indices=inlier_indices,
+            correspondences=correspondences,
+        )
+        if inlier_count < config.min_inliers:
+            result.reject_reason = "too few essential inliers"
+        results[pair] = result
+        if pair_index % 25 == 0 or pair_index == len(pairs):
+            print(f"Geometrically checked {pair_index}/{len(pairs)} learned pairs.")
+
+    for result in results.values():
+        if result.reject_reason:
+            continue
+        if not _cycle_intermediates(result, results):
+            result.kept_matches = len(result.correspondences)
+            np.savetxt(
+                correspondence_dir / f"{result.pair[0]}_{result.pair[1]}.txt",
+                result.correspondences,
+                fmt="%.8f",
+            )
+            result.accepted = True
+            continue
+        cycle_mask = _cycle_supported_mask(result, results)
+        result.cycle_matches = int(np.count_nonzero(cycle_mask))
+        if result.cycle_matches < config.learned_min_cycle_matches:
+            result.reject_reason = "insufficient cycle support"
+            continue
+        result.indices = result.indices[cycle_mask]
+        result.correspondences = result.correspondences[cycle_mask]
+        result.kept_matches = len(result.correspondences)
+        np.savetxt(
+            correspondence_dir / f"{result.pair[0]}_{result.pair[1]}.txt",
+            result.correspondences,
+            fmt="%.8f",
+        )
+        result.accepted = True
+
+    if config.learned_augment_supplied:
+        if config.pair_source != "supplied":
+            raise ValueError(
+                "learned_augment_supplied requires pair_source='supplied'"
+            )
+        anchor_id = dataset.image_ids[0]
+        for result in results.values():
+            supplied = dataset.load_correspondences(result.pair)
+            if result.accepted and anchor_id not in result.pair:
+                result.correspondences = np.vstack(
+                    (supplied, result.correspondences)
+                )
+                result.pair_type = "supplied+learned"
+            else:
+                result.correspondences = supplied
+                result.pair_type = "supplied-only"
+            result.kept_matches = len(result.correspondences)
+            result.accepted = True
+            np.savetxt(
+                correspondence_dir / f"{result.pair[0]}_{result.pair[1]}.txt",
+                result.correspondences,
+                fmt="%.8f",
+            )
+
+    accepted = [result for result in results.values() if result.accepted]
+    correspondence_paths = {
+        result.pair: correspondence_dir / f"{result.pair[0]}_{result.pair[1]}.txt"
+        for result in accepted
+    }
+    from .tracks import build_tracks
+
+    track_result = build_tracks(
+        replace(dataset, correspondence_paths=correspondence_paths),
+        min_observations=2,
+    )
+    _write_pair_diagnostics(
+        cache_root / "pair_diagnostics.csv",
+        list(results.values()),
+        track_result.skipped_conflicts_by_pair,
+    )
+    summary = MatchingSummary(
+        candidate_pairs=len(pairs),
+        accepted_pairs=len(accepted),
+        correspondences=sum(result.kept_matches for result in accepted),
+    )
+    summary_path.write_text(
+        json.dumps({"config": asdict(config), "summary": asdict(summary)}, indent=2),
+        encoding="utf-8",
+    )
+    return correspondence_dir, summary
+
+
 def generate_correspondences(
     dataset: Stage1Dataset,
     cache_root: str | Path,
@@ -380,17 +864,75 @@ def generate_correspondences(
         for path in correspondence_dir.glob("*.txt"):
             path.unlink()
 
-    features = {
-        image_id: _extract_features(
-            dataset.image_paths[image_id],
-            image_id,
-            feature_dir,
-            config,
-            regenerate,
+    learned_matcher = None
+    image_shapes: dict[int, tuple[int, int]] = {}
+    if config.feature_mode == "superpoint-lightglue":
+        learned_matcher = create_superpoint_lightglue_matcher(
+            max_keypoints=config.max_features,
+            device=config.learned_device,
+            filter_threshold=config.learned_filter_threshold,
+            image_scale=1.0,
         )
-        for image_id in dataset.image_ids
-    }
-    pairs = circular_image_pairs(dataset.image_ids, config.pair_window)
+        features = {}
+        for image_id in dataset.image_ids:
+            image_path = dataset.image_paths[image_id]
+            image = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
+            if image is None:
+                raise ValueError(f"Could not read image: {image_path}")
+            mask = _feature_mask(
+                image, config.mask_apriltags, config.apriltag_padding
+            )
+            features[image_id] = learned_matcher.extract(image_path, mask=mask)
+            image_shapes[image_id] = image.shape[:2]
+    else:
+        features = {
+            image_id: _extract_features(
+                dataset.image_paths[image_id],
+                image_id,
+                feature_dir,
+                config,
+                regenerate,
+            )
+            for image_id in dataset.image_ids
+        }
+    if config.wide_baseline:
+        if learned_matcher is None:
+            raise ValueError(
+                "wide-baseline retrieval currently requires "
+                "--feature-mode superpoint-lightglue"
+            )
+        return _generate_wide_learned_correspondences(
+            dataset,
+            cache_root,
+            correspondence_dir,
+            summary_path,
+            config,
+            learned_matcher,
+            features,
+            image_shapes,
+        )
+    if config.learned_cycle_filter:
+        if learned_matcher is None:
+            raise ValueError(
+                "learned_cycle_filter requires superpoint-lightglue"
+            )
+        return _generate_cycle_filtered_learned_correspondences(
+            dataset,
+            cache_root,
+            correspondence_dir,
+            summary_path,
+            config,
+            learned_matcher,
+            features,
+            image_shapes,
+        )
+    if config.learned_augment_supplied:
+        raise ValueError(
+            "learned_augment_supplied requires learned_cycle_filter"
+        )
+    if config.wide_pose_only:
+        raise ValueError("wide_pose_only requires wide_baseline")
+    pairs = matching_image_pairs(dataset, config)
     accepted_pairs = 0
     correspondence_count = 0
 
@@ -402,11 +944,17 @@ def generate_correspondences(
             correspondence_count += len(values)
             continue
 
-        raw_correspondences = _match_feature_sets(
-            features[first_id],
-            features[second_id],
-            config.ratio_threshold,
-        )
+        if learned_matcher is not None:
+            first_points, second_points = learned_matcher.match(
+                features[first_id], features[second_id]
+            )
+            raw_correspondences = np.hstack((first_points, second_points))
+        else:
+            raw_correspondences = _match_feature_sets(
+                features[first_id],
+                features[second_id],
+                config.ratio_threshold,
+            )
         if len(raw_correspondences) >= max(5, config.min_inliers):
             first_points = raw_correspondences[:, :2]
             second_points = raw_correspondences[:, 2:]

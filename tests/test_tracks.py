@@ -29,6 +29,7 @@ def test_tracks_merge_observations_across_pairs(tmp_path):
     assert len(result.tracks) == 1
     assert set(result.tracks[0].observations) == {0, 1, 2}
     assert result.skipped_conflicts == 0
+    assert result.skipped_conflicts_by_pair == {}
 
 
 def test_tracks_can_require_three_observations(tmp_path):

@@ -27,6 +27,7 @@ class TrackBuildResult:
     tracks: list[Track]
     observation_to_track: dict[ObservationKey, int]
     skipped_conflicts: int
+    skipped_conflicts_by_pair: dict[tuple[int, int], int]
 
 
 class _UnionFind:
@@ -77,6 +78,7 @@ def build_tracks(
     nodes: dict[ObservationKey, int] = {}
     coordinates: dict[ObservationKey, np.ndarray] = {}
     skipped_conflicts = 0
+    skipped_conflicts_by_pair: dict[tuple[int, int], int] = {}
 
     def get_node(image_id: int, point: np.ndarray) -> int:
         key = observation_key(image_id, point, tolerance)
@@ -91,6 +93,10 @@ def build_tracks(
             second_node = get_node(second_id, match[2:])
             if not union_find.union(first_node, second_node):
                 skipped_conflicts += 1
+                pair = (first_id, second_id)
+                skipped_conflicts_by_pair[pair] = (
+                    skipped_conflicts_by_pair.get(pair, 0) + 1
+                )
 
     members: dict[int, list[ObservationKey]] = {}
     for key, node in nodes.items():
@@ -115,4 +121,5 @@ def build_tracks(
         tracks=tracks,
         observation_to_track=observation_to_track,
         skipped_conflicts=skipped_conflicts,
+        skipped_conflicts_by_pair=skipped_conflicts_by_pair,
     )

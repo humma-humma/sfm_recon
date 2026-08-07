@@ -22,6 +22,7 @@ evaluation = [
 ]
 visualization = ["matplotlib>=3.7"]
 open3d = ["open3d>=0.19"]
+learned = ["torch>=2.0", "torchvision>=0.15", "kornia>=0.7"]
 
 [project.scripts]
 sfm-reconstruct = "sfm_reconstruction.cli:main"
@@ -31,6 +32,12 @@ sfm-open3d = "sfm_reconstruction.open3d_viewer:main"
 sfm-demo-video = "sfm_reconstruction.demo_video:main"
 sfm-dense-fuse = "sfm_reconstruction.dense_fusion:main"
 sfm-clean-cloud = "sfm_reconstruction.point_cloud_cleanup:main"
+sfm-stage3-setup = "sfm_reconstruction.stage3:main"
+sfm-stage3-plot = "sfm_reconstruction.stage3_visualize:main"
+sfm-stage3-open3d = "sfm_reconstruction.stage3_open3d_viewer:main"
+sfm-stage2-eval = "sfm_reconstruction.stage2_evaluation:main"
+sfm-stage1-eval = "sfm_reconstruction.stage1_evaluation:main"
+sfm-stage1-augment = "sfm_reconstruction.stage1_augmentation:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

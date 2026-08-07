@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -33,6 +34,7 @@ class ReconstructionConfig:
     max_point_distance_factor: float | None = None
     two_view_max_reprojection_error: float | None = None
     two_view_min_triangulation_angle: float | None = None
+    initial_pose_correspondence_dir: Path | None = None
 
 
 def _filter_points(
@@ -215,10 +217,17 @@ def _initialize(
         matches = dataset.load_correspondences(pair)
         first_points = matches[:, :2]
         second_points = matches[:, 2:]
+        pose_matches = matches
+        if config.initial_pose_correspondence_dir is not None:
+            pose_path = config.initial_pose_correspondence_dir / (
+                f"{pair[0]}_{pair[1]}.txt"
+            )
+            if pose_path.is_file():
+                pose_matches = np.loadtxt(pose_path, dtype=np.float64, ndmin=2)
         try:
             relative = estimate_relative_pose(
-                first_points,
-                second_points,
+                pose_matches[:, :2],
+                pose_matches[:, 2:],
                 dataset.intrinsics,
                 config.essential_threshold,
             )
@@ -234,7 +243,7 @@ def _initialize(
             second_pose,
             dataset.intrinsics,
         )
-        valid = relative.inliers & _valid_triangulations(
+        valid = _valid_triangulations(
             points_3d,
             first_points,
             second_points,
@@ -243,6 +252,8 @@ def _initialize(
             dataset.intrinsics,
             config,
         )
+        if pose_matches is matches:
+            valid &= relative.inliers
         track_ids = _track_ids_for_matches(
             pair, matches, track_result, config.track_tolerance
         )
@@ -430,4 +441,53 @@ def reconstruct(
         tracks=track_result.tracks,
         initial_pair=initial_pair,
         skipped_track_conflicts=track_result.skipped_conflicts,
+    )
+
+
+def retriangulate_with_poses(
+    dataset: Stage1Dataset,
+    result: ReconstructionResult,
+    poses: dict[int, Pose],
+    config: ReconstructionConfig | None = None,
+) -> ReconstructionResult:
+    """Rebuild points on unchanged tracks using externally refined poses."""
+    config = config or ReconstructionConfig()
+    points: dict[int, np.ndarray] = {}
+    _triangulate_new_tracks(
+        dataset.intrinsics,
+        result.tracks,
+        poses,
+        points,
+        config,
+    )
+    points = _filter_points(
+        dataset.intrinsics,
+        result.tracks,
+        poses,
+        points,
+        config,
+    )
+    if config.bundle_adjustment and len(poses) >= 3 and points:
+        poses, points = bundle_adjust(
+            dataset.intrinsics,
+            result.tracks,
+            poses,
+            points,
+            fixed_camera_ids=set(result.initial_pair),
+            max_nfev=config.bundle_adjustment_max_nfev,
+            max_reprojection_error=config.max_reprojection_error,
+        )
+        points = _filter_points(
+            dataset.intrinsics,
+            result.tracks,
+            poses,
+            points,
+            config,
+        )
+    return ReconstructionResult(
+        poses=poses,
+        points=points,
+        tracks=result.tracks,
+        initial_pair=result.initial_pair,
+        skipped_track_conflicts=result.skipped_track_conflicts,
     )

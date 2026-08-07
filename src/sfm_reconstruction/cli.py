@@ -17,6 +17,11 @@ from .io import (
 from .matching import MatchingConfig, generate_correspondences
 from .reconstruction import ReconstructionConfig, reconstruct
 from .reprojection_diagnostics import write_reprojection_diagnostics
+from .stage2_pose_refinement import (
+    Stage2PoseRefinementConfig,
+    refine_stage2_poses,
+    write_stage2_pose_refinement,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,6 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-pnp-points", type=int, default=12)
     parser.add_argument("--min-pnp-inliers", type=int, default=10)
     parser.add_argument("--min-track-observations", type=int, default=2)
+    parser.add_argument("--max-reprojection-error", type=float, default=5.0)
     parser.add_argument("--max-point-distance-factor", type=float)
     parser.add_argument("--two-view-max-reprojection-error", type=float)
     parser.add_argument("--two-view-min-triangulation-angle", type=float)
@@ -43,12 +49,42 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-features", type=int, default=1500)
     parser.add_argument(
         "--feature-mode",
-        choices=("sift", "akaze", "sift+akaze"),
+        choices=("sift", "akaze", "sift+akaze", "superpoint-lightglue"),
         default="sift",
     )
+    parser.add_argument(
+        "--learned-device", choices=("auto", "cpu", "cuda"), default="auto"
+    )
+    parser.add_argument("--learned-filter-threshold", type=float, default=0.2)
+    parser.add_argument("--learned-cycle-filter", action="store_true")
+    parser.add_argument("--learned-min-cycle-matches", type=int, default=15)
+    parser.add_argument("--learned-augment-supplied", action="store_true")
+    parser.add_argument("--initial-pose-correspondence-dir", type=Path)
+    parser.add_argument("--wide-baseline", action="store_true")
+    parser.add_argument("--wide-pose-only", action="store_true")
+    parser.add_argument("--wide-retrieval-max-pairs", type=int, default=100)
+    parser.add_argument("--wide-min-frame-gap", type=int, default=4)
+    parser.add_argument("--wide-min-similarity", type=float, default=0.7)
+    parser.add_argument("--wide-min-inlier-ratio", type=float, default=0.25)
+    parser.add_argument("--wide-min-spatial-coverage", type=float, default=0.25)
+    parser.add_argument("--wide-min-cycle-matches", type=int, default=15)
+    parser.add_argument("--wide-max-pairs-per-image", type=int, default=1)
+    parser.add_argument("--wide-pose-rotation-weight", type=float, default=0.15)
+    parser.add_argument("--wide-pose-translation-weight", type=float, default=0.05)
+    parser.add_argument(
+        "--wide-retrieval-device",
+        choices=("auto", "cpu", "cuda"),
+        default="auto",
+    )
+    parser.add_argument("--wide-retrieval-batch-size", type=int, default=16)
     parser.add_argument("--sift-contrast-threshold", type=float, default=0.03)
     parser.add_argument("--sift-edge-threshold", type=float, default=10.0)
     parser.add_argument("--pair-window", type=int, default=3)
+    parser.add_argument(
+        "--matching-pair-source",
+        choices=("circular", "supplied"),
+        default="circular",
+    )
     parser.add_argument("--ratio-threshold", type=float, default=0.75)
     parser.add_argument("--matching-essential-threshold", type=float, default=1.0)
     parser.add_argument("--min-match-inliers", type=int, default=15)
@@ -77,11 +113,28 @@ def main(argv: list[str] | None = None) -> None:
                 sift_contrast_threshold=args.sift_contrast_threshold,
                 sift_edge_threshold=args.sift_edge_threshold,
                 pair_window=args.pair_window,
+                pair_source=args.matching_pair_source,
                 ratio_threshold=args.ratio_threshold,
                 essential_threshold=args.matching_essential_threshold,
                 min_inliers=args.min_match_inliers,
                 mask_apriltags=args.mask_apriltags,
                 apriltag_padding=args.apriltag_padding,
+                learned_device=args.learned_device,
+                learned_filter_threshold=args.learned_filter_threshold,
+                learned_cycle_filter=args.learned_cycle_filter,
+                learned_min_cycle_matches=args.learned_min_cycle_matches,
+                learned_augment_supplied=args.learned_augment_supplied,
+                wide_baseline=args.wide_baseline,
+                wide_pose_only=args.wide_pose_only,
+                wide_retrieval_max_pairs=args.wide_retrieval_max_pairs,
+                wide_min_frame_gap=args.wide_min_frame_gap,
+                wide_min_similarity=args.wide_min_similarity,
+                wide_min_inlier_ratio=args.wide_min_inlier_ratio,
+                wide_min_spatial_coverage=args.wide_min_spatial_coverage,
+                wide_min_cycle_matches=args.wide_min_cycle_matches,
+                wide_max_pairs_per_image=args.wide_max_pairs_per_image,
+                wide_retrieval_device=args.wide_retrieval_device,
+                wide_retrieval_batch_size=args.wide_retrieval_batch_size,
             ),
             overwrite=args.overwrite_correspondences,
         )
@@ -99,11 +152,35 @@ def main(argv: list[str] | None = None) -> None:
         min_pnp_points=args.min_pnp_points,
         min_pnp_inliers=args.min_pnp_inliers,
         min_track_observations=args.min_track_observations,
+        max_reprojection_error=args.max_reprojection_error,
         max_point_distance_factor=args.max_point_distance_factor,
         two_view_max_reprojection_error=args.two_view_max_reprojection_error,
         two_view_min_triangulation_angle=args.two_view_min_triangulation_angle,
+        initial_pose_correspondence_dir=args.initial_pose_correspondence_dir,
     )
     result = reconstruct(dataset, config)
+    if args.stage == 2 and args.wide_pose_only:
+        refinement_config = Stage2PoseRefinementConfig(
+            wide_rotation_weight=args.wide_pose_rotation_weight,
+            wide_translation_weight=args.wide_pose_translation_weight,
+        )
+        result, refinement_summary, refinement_diagnostics = refine_stage2_poses(
+            dataset,
+            result,
+            cache_root / "wide_correspondences",
+            config,
+            refinement_config,
+        )
+        write_stage2_pose_refinement(
+            args.output_dir,
+            refinement_config,
+            refinement_summary,
+            refinement_diagnostics,
+        )
+        print(
+            f"Accepted {refinement_summary.accepted_constraints}/"
+            f"{refinement_summary.candidate_constraints} wide pose constraints."
+        )
 
     write_camera_parameters(
         args.output_dir / "estimated_camera_parameters.json", dataset, result

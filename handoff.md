@@ -1,6 +1,6 @@
 # SfM Project Handoff
 
-Last updated: 2026-06-17
+Last updated: 2026-06-21
 
 ## Current Status
 
@@ -11,7 +11,7 @@ testable Python package under:
 C:\Master Thesis\3d_motion_gen\Others\Project\sfm_reconstruction
 ```
 
-Stage 1 and Stage 2 are operational:
+Stage 1, Stage 2, and Stage 3 are operational:
 
 - Stage 1 reconstructs from supplied calibrated correspondences.
 - Stage 2 extracts SIFT features, with optional AKAZE augmentation, matches
@@ -22,9 +22,12 @@ Stage 1 and Stage 2 are operational:
 - Rich colored PLY export and optional Open3D visualization are available.
 - Improved Stage 2 settings suppress the AprilTag calibration sheet and weak
   geometry, producing a much cleaner object reconstruction.
+- Stage 3 validates RGB-D data, estimates RGB-D visual odometry, estimates
+  visual loop edges, optimizes a keyframe pose graph, runs the official
+  evaluator, and provides static plus Open3D trajectory/scene visualizations.
 
-This workspace is not currently detected as a Git repository. There is no
-commit or branch to use as a restore point.
+This workspace has a Git repository, but the current Stage 3 work includes
+untracked files. Inspect `git status` before packaging or committing.
 
 ## Source Context
 
@@ -37,7 +40,7 @@ legacy code was left untouched as reference:
 - `..\Stage_2_Description.pdf`
 - `..\Experiments\Stage_1_Description.pdf`
 - `..\Computer_Vision_Lecture_12_by_Thomas_Brox_Slides.pdf`
-- `..\Stage_3_Description.pdf`: not implemented.
+- `..\Stage_3_Description.pdf`: implemented in the Stage 3 package modules.
 
 The new package does not import the legacy notebooks or scripts.
 
@@ -99,11 +102,17 @@ src/sfm_reconstruction/
   io.py
   matching.py
   models.py
+  official_eval.py
   point_cloud_cleanup.py
+  pose_graph.py
   reconstruction.py
   reprojection_diagnostics.py
+  stage3.py
+  stage3_open3d_viewer.py
+  stage3_visualize.py
   tracks.py
   visualize.py
+  _tum_eval/
 tests/
   test_blender_viewer.py
   test_dataset.py
@@ -112,10 +121,15 @@ tests/
   test_geometry.py
   test_io.py
   test_matching.py
+  test_official_eval.py
   test_open3d_viewer.py
   test_point_cloud_cleanup.py
+  test_pose_graph.py
   test_reconstruction.py
   test_reprojection_diagnostics.py
+  test_stage3.py
+  test_stage3_open3d_viewer.py
+  test_stage3_visualize.py
   test_tracks.py
   test_visualize.py
 ```
@@ -145,6 +159,16 @@ Important module responsibilities:
 - `blender_viewer.py` and `scripts/blender_import_reconstruction.py`: generate
   ready-to-open Blender scenes without requiring project packages inside
   Blender's Python runtime.
+- `stage3.py`: RGB-D dataset validation, trajectory IO, RGB-D visual odometry,
+  loop-closure post-processing, and Stage 3 CLI orchestration.
+- `pose_graph.py`: visual loop-edge estimation, pose graph construction,
+  keyframe optimization, duplicate-loop spacing, trajectory export, and
+  comparison summaries.
+- `official_eval.py`: wrapper around the assignment evaluator with vendored TUM
+  association support.
+- `stage3_visualize.py`: static aligned trajectory and error plots.
+- `stage3_open3d_viewer.py`: interactive Stage 3 trajectory overlays, sampled
+  RGB-D scene clouds, optional mesh preview, and GT-pose diagnostic overlays.
 
 Console entry points:
 
@@ -155,6 +179,9 @@ sfm-blender
 sfm-open3d
 sfm-dense-fuse
 sfm-clean-cloud
+sfm-stage3-setup
+sfm-stage3-plot
+sfm-stage3-open3d
 ```
 
 ## Stage 1 Implementation
@@ -479,6 +506,66 @@ Each dense run writes:
 *.spatial_density.csv
 ```
 
+## Stage 3 Implementation
+
+Stage 3 now includes:
+
+1. RGB-D dataset validation for `rgb/`, `depth/`, `camera_parameters.json`,
+   and `gt_camera_trajectory.txt`.
+2. Assignment-format trajectory IO:
+
+```text
+timestamp tx ty tz qx qy qz qw
+```
+
+3. RGB-D visual odometry with descriptor matching plus PnP.
+4. Experimental LK-PnP and 3D-3D RGB-D motion models.
+5. Visual loop-edge estimation from RGB-D data.
+6. Pose graph construction and robust optimization.
+7. Keyframe pose graph acceleration with correction interpolation back to all
+   original frames.
+8. Official evaluator wrapper around the provided `eval.py` / `eval_ate.py`.
+9. Static trajectory plots and Open3D trajectory/scene visualization.
+
+Current promoted Stage 3 run:
+
+```powershell
+& $python_open3d -m sfm_reconstruction.stage3 `
+  --dataset "..\Experiments\Stage_3_Data\stage3" `
+  --output-dir "outputs\stage3_pose_graph_keyframe_stride8_nfev50" `
+  --input-trajectory "outputs\stage3_pose_graph_full\estimated_camera_trajectory.txt" `
+  --run-pose-graph `
+  --pose-graph-keyframe-stride 8 `
+  --max-loop-edges 3 `
+  --loop-endpoint-spacing 100 `
+  --optimizer-max-nfev 50 `
+  --run-official-eval
+```
+
+Current Stage 3 result:
+
+| Output | Optimized nodes | Internal RMSE | Official ATE |
+|---|---:|---:|---:|
+| `outputs/stage3_pose_graph_full/` | 4,396 | 6.6549 | 3.6164 |
+| `outputs/stage3_pose_graph_keyframe_stride8_nfev50/` | 552 | **5.2430** | **3.0305** |
+
+Important Stage 3 outputs:
+
+```text
+outputs/stage3_pose_graph_keyframe_stride8_nfev50/
+  estimated_camera_trajectory_pose_graph.txt
+  official_eval_summary.json
+  trajectory_comparison.png
+  stage3_scene_dense_voxel.ply
+  stage3_scene_gt_pose_dense.ply
+  stage3_scene_est_pose_dense.ply
+  stage3_scene_est_pose_dense_aligned_to_gt.ply
+```
+
+The GT-aligned scene cloud is diagnostic only. It uses
+`gt_camera_trajectory.txt` to align the estimated fused scene to the GT-pose
+scene and must not be treated as a GT-free reconstruction result.
+
 Presentation cleanup command:
 
 ```powershell
@@ -578,12 +665,40 @@ Blender controls:
 The Blender importer represents each sparse point as a small tetrahedral
 marker so points remain visible in solid and rendered views.
 
+Stage 3 static trajectory plot:
+
+```powershell
+& $python_open3d -m sfm_reconstruction.stage3_visualize `
+  --ground-truth "..\Experiments\Stage_3_Data\stage3\gt_camera_trajectory.txt" `
+  --trajectory "Raw VO=outputs\stage3_pose_graph_full\estimated_camera_trajectory.txt" `
+  --trajectory "Full pose graph=outputs\stage3_pose_graph_full\estimated_camera_trajectory_pose_graph.txt" `
+  --trajectory "Keyframe pose graph=outputs\stage3_pose_graph_keyframe_stride8_nfev50\estimated_camera_trajectory_pose_graph.txt" `
+  --output "outputs\stage3_pose_graph_keyframe_stride8_nfev50\trajectory_comparison.png"
+```
+
+Stage 3 Open3D scene viewer:
+
+```powershell
+& $python_open3d -m sfm_reconstruction.stage3_open3d_viewer `
+  --dataset "..\Experiments\Stage_3_Data\stage3" `
+  --scene-trajectory "outputs\stage3_pose_graph_keyframe_stride8_nfev50\estimated_camera_trajectory_pose_graph.txt" `
+  --scene-frame-stride 10 `
+  --scene-pixel-stride 4 `
+  --scene-max-points 1200000 `
+  --scene-voxel-size 0.02 `
+  --scene-remove-outliers `
+  --trajectory "Keyframe pose graph=outputs\stage3_pose_graph_keyframe_stride8_nfev50\estimated_camera_trajectory_pose_graph.txt" `
+  --no-align `
+  --trajectory-smoothing-window 9 `
+  --point-size 1.5
+```
+
 ## Tests
 
 Latest verification:
 
 ```text
-31 passed
+76 passed
 ```
 
 Run:
@@ -595,12 +710,12 @@ $env:PYTHONDONTWRITEBYTECODE = "1"
 ```
 
 Coverage includes dataset loading, matching, pair selection, track merging,
-geometry, synthetic reconstruction, evaluation, visualization loaders, and
-Blender command construction. Added coverage includes rich PLY export, the
-Open3D viewer's PLY parsing, color modes, point-cloud selection, camera
-geometry construction, dense-fusion helper behavior, pair scoring, dense
-diagnostics, disparity-range clamping for OpenCV SGBM, point-cloud cleanup
-export, and reprojection diagnostic export.
+geometry, synthetic reconstruction, evaluation, visualization loaders, Blender
+command construction, rich PLY export, Open3D viewer helpers, dense-fusion
+diagnostics, point-cloud cleanup, reprojection diagnostics, Stage 3 trajectory
+IO, RGB-D odometry helpers, loop-edge estimation, pose graph optimization,
+official evaluator wrapping, static Stage 3 plotting, and Stage 3 Open3D scene
+geometry/export helpers.
 
 ## Experiments and Lessons
 
@@ -632,6 +747,10 @@ export, and reprojection diagnostic export.
 - Camera trajectory smoothness is not explicitly regularized.
 - Intrinsics are fixed; lens distortion is not modeled.
 - Boot has no complete pose ground truth for quantitative pose validation.
+- Stage 3 has GT trajectory but no GT full mesh. GT-pose RGB-D scene fusion is
+  only a qualitative proxy, not a true ground-truth mesh comparison.
+- GT-aligned Stage 3 scene overlays are diagnostics only and should not be used
+  as final GT-free outputs.
 - Open3D support is installed only in the cloned `mardm_open3d` environment.
 - Generated outputs and Python cache files have accumulated; do not delete
   experimental outputs until the desired deliverables are archived.
@@ -653,17 +772,18 @@ export, and reprojection diagnostic export.
 - [x] Update `README.md` visualization examples that still point at older
   `stage2_*_final` directories; prefer the improved
   `stage2_milk_masked_track3_ba` and `stage2_boot_improved` outputs.
-- [ ] Add reproducibility infrastructure: initialize Git, add ignore rules for
-  generated outputs/caches, commit the verified package, and script the 31 unit
-  tests plus Stage 1 metric regression.
+- [ ] Add reproducibility infrastructure: inspect Git state, add any missing
+  ignore rules for generated outputs/caches, commit the verified package, and
+  keep a script around the 76 unit tests plus metric regressions.
 - [ ] Archive desired deliverables before cleaning generated outputs, matching
   caches, Python caches, or experimental reconstruction directories.
 - [x] Add a hybrid dense-fusion probe using verified SfM poses, sparse-support
   filtering, and Open3D inspection.
-- [ ] Stage 3 and advanced matching backlog: implement the Stage 3 assignment
-  from `..\Stage_3_Description.pdf`; if object coverage is still insufficient,
-  evaluate learned matching such as SuperPoint/LightGlue, DISK/LightGlue, or
-  LoFTR-style matching after validating on milk.
+- [x] Stage 3 assignment implementation: RGB-D VO, visual loop closure, pose
+  graph, keyframe acceleration, official evaluator, and visualization.
+- [ ] Learning-based augmentation backlog: evaluate SuperPoint/LightGlue,
+  DISK/LightGlue, or LoFTR-style matching as an optional frontend for all
+  stages, with Stage 3 loop-closure discovery as the first priority.
 
 ## Prioritized Next Steps
 
@@ -686,9 +806,13 @@ export, and reprojection diagnostic export.
    verified package, and add a small regression script or CI job for the
    31 unit tests plus Stage 1 metrics.
 
-5. Stage 3 / advanced matching.
-   Treat learned matching as part of the Stage 3 backlog rather than the
-   current Stage 2 completion path.
+5. Learning-based augmentation.
+   Treat learned matching as the recommended next research step across all
+   stages. For Stage 1, compare against supplied correspondences as an
+   ablation. For Stage 2, target wider-baseline object coverage. For Stage 3,
+   use learned matches first for loop closure and only then for frame-to-frame
+   VO. Gaussian Splatting remains a downstream visualization/demo once poses
+   are stable, not a trajectory-drift fix.
 
 ## Recommended Resume Point
 
@@ -701,7 +825,7 @@ outputs/stage2_boot_improved
 
 Before changing reconstruction behavior:
 
-1. Run the 31 unit tests.
+1. Run the 76 unit tests.
 2. Re-run the Stage 1 regression if common geometry/reconstruction code changes.
 3. Validate on milk using pose metrics and the supplied mesh proxy.
 4. Only then regenerate boot and its Blender scene.
@@ -865,3 +989,395 @@ Remaining Git-only step:
 4. Confirm ignored items are not staged:
    `outputs/`, `deliverables/*.zip`, caches, datasets, and `.matplotlib*/`.
 5. Commit and push.
+
+## Stage 3 Setup Update - 2026-06-20
+
+Added a Stage 3 RGB-D SLAM setup scaffold:
+
+```text
+src/sfm_reconstruction/stage3.py
+tests/test_stage3.py
+docs/STAGE3_SETUP.md
+```
+
+New console entry point:
+
+```text
+sfm-stage3-setup = "sfm_reconstruction.stage3:main"
+```
+
+The setup helper validates the expected assignment layout:
+
+```text
+rgb/
+depth/
+camera_parameters.json
+gt_camera_trajectory.txt
+```
+
+It writes `stage3_manifest.json` with frame timestamps, RGB/depth paths,
+intrinsics, depth-match counts, and the ground-truth trajectory path when
+present. With `--write-trajectory-template`, it also writes
+`estimated_camera_trajectory.txt` in the evaluator format:
+
+```text
+timestamp tx ty tz qx qy qz qw
+```
+
+The trajectory template intentionally uses identity poses for every timestamp;
+it is only a format scaffold, not a SLAM result.
+
+Current Stage 3 scope:
+
+- [x] RGB-D dataset layout validation.
+- [x] Camera intrinsics loading.
+- [x] RGB/depth timestamp matching.
+- [x] Ground-truth and estimated trajectory parsing/writing.
+- [x] Manifest export.
+- [ ] RGB-D visual odometry.
+- [ ] Loop closure using the sequence returning to the start.
+- [ ] Pose-graph or bundle-adjustment refinement.
+- [ ] Evaluation wrapper around the assignment `evaluate.py` script.
+
+Latest local test result after the setup update:
+
+```text
+38 passed
+```
+
+Note: the root `stage3.zip` was present but `tar -tf stage3.zip` reported a
+damaged or unsupported zip archive from this shell, so no Stage 3 dataset was
+unpacked during this setup pass.
+
+## Stage 3 RGB-D Odometry Update - 2026-06-20
+
+The Stage 3 data was unpacked and validated at:
+
+```text
+C:\Master Thesis\3d_motion_gen\Others\Project\Experiments\Stage_3_Data\stage3
+```
+
+Dataset integrity checks:
+
+- 4,396 RGB PNGs.
+- 4,396 depth PNGs.
+- 4,396 ground-truth trajectory rows.
+- RGB/depth timestamp mismatch: 0.
+- RGB/ground-truth timestamp mismatch: 0.
+- PNG decode failures: 0.
+- RGB shape: 1080x1920x3.
+- Depth shape: 1080x1920.
+
+Implemented a first-pass RGB-D visual odometry baseline in:
+
+```text
+src/sfm_reconstruction/stage3.py
+```
+
+It reuses existing Stage 1/2 package utilities:
+
+- `matching.match_descriptors`
+- `matching.root_sift`
+- `geometry.solve_pnp`
+
+The odometry path performs AKAZE or SIFT matching, backprojects reference-frame
+depth to 3D, estimates current-from-reference motion with PnP RANSAC, composes
+camera-to-world poses, and writes the assignment trajectory format:
+
+```text
+timestamp tx ty tz qx qy qz qw
+```
+
+It also writes:
+
+```text
+stage3_manifest.json
+rgbd_odometry_report.csv
+trajectory_metrics.json
+```
+
+Useful command:
+
+```powershell
+$env:PYTHONPATH = "src"
+& $python_open3d -m sfm_reconstruction.stage3 `
+  --dataset "..\Experiments\Stage_3_Data\stage3" `
+  --output-dir "outputs\stage3_rgbd_vo_subset500_fullres" `
+  --max-frames 500 `
+  --run-rgbd-odometry `
+  --max-features 1800 `
+  --min-matches 20 `
+  --min-pnp-inliers 8
+```
+
+Measured probes:
+
+| Run | Tracked transitions | Translation RMSE |
+|---|---:|---:|
+| `outputs/stage3_rgbd_vo_subset30/` | 29 / 29 | 0.0164 |
+| `outputs/stage3_rgbd_vo_subset100_scale05/` | 99 / 99 | 0.0540 |
+| `outputs/stage3_rgbd_vo_subset500_scale05/` | 499 / 499 | 0.2874 |
+| `outputs/stage3_rgbd_vo_subset200_fullres/` | 199 / 199 | 0.0474 |
+| `outputs/stage3_rgbd_vo_subset500_fullres/` | 499 / 499 | 0.2419 |
+| `outputs/stage3_rgbd_vo_full_guarded_scale05/` | 4298 / 4395 | 8.4356 |
+
+The full-sequence half-scale baseline has heavy accumulated drift. It is a
+working VO baseline, not a final SLAM result. Full-resolution probes are more
+accurate but slower. The next Stage 3 work should add loop closure and
+pose-graph refinement before treating the full trajectory as a deliverable.
+
+Latest local test result after the odometry update:
+
+```text
+42 passed
+```
+
+## Stage 3 Local VO Improvement Update - 2026-06-20
+
+Added two additional local motion modes to `stage3.py`:
+
+```text
+--motion-model lk_pnp
+--motion-model rgbd
+```
+
+`lk_pnp` uses Lucas-Kanade tracking between adjacent RGB frames before
+reference-depth PnP. `rgbd` uses depth from both frames and estimates a rigid
+3D-3D transform with deterministic RANSAC. Both remain useful experiment modes,
+but neither beat descriptor matching plus PnP on the first 500 frames.
+
+Promoted descriptor-PnP defaults:
+
+```text
+--motion-model pnp
+--ratio-threshold 0.8
+--pnp-reprojection-error 2
+```
+
+Updated probe results:
+
+| Run | Tracked transitions | Translation RMSE |
+|---|---:|---:|
+| `outputs/stage3_pnp_vo_subset500_fullres_ratio08_reproj2/` | 499 / 499 | 0.2166 |
+| `outputs/stage3_pnp_vo_subset500_fullres_ratio08_reproj1/` | 499 / 499 | 0.2261 |
+| `outputs/stage3_pnp_vo_subset500_fullres_ratio08_reproj8/` | 499 / 499 | 0.2759 |
+| `outputs/stage3_pnp_vo_subset500_fullres_ratio085_reproj2/` | 499 / 499 | 0.2551 |
+| `outputs/stage3_pnp_vo_subset1000_fullres_tuned/` | 999 / 999 | 0.7587 |
+| `outputs/stage3_rgbd3d_vo_subset500_fullres/` | 499 / 499 | 0.6341 |
+| `outputs/stage3_lk_pnp_vo_subset500_fullres/` | 499 / 499 | 0.4476 |
+
+The best pre-loop-closure local VO setting so far is tuned descriptor-PnP with
+ratio `0.8` and PnP RANSAC reprojection threshold `2 px`.
+
+Latest local test result after this update:
+
+```text
+44 passed
+```
+
+## Stage 3 Loop-Closure Setup Update - 2026-06-20
+
+Added loop-closure post-processing to `stage3.py`.
+
+New CLI options:
+
+```text
+--input-trajectory
+--apply-loop-closure
+--loop-closure-window-fraction
+--loop-closure-correct-rotation
+```
+
+The current default is conservative:
+
+```text
+--loop-closure-window-fraction 0.7
+rotation correction disabled
+```
+
+It closes the final translation back to the first pose while preserving the raw
+VO trajectory in a separate file. Output files:
+
+```text
+estimated_camera_trajectory_loop_closed.txt
+loop_closure_summary.json
+trajectory_metrics_loop_closed.json
+```
+
+Useful command:
+
+```powershell
+$env:PYTHONPATH = "src"
+& $python_open3d -m sfm_reconstruction.stage3 `
+  --dataset "..\Experiments\Stage_3_Data\stage3" `
+  --output-dir "outputs\stage3_rgbd_vo_full_guarded_scale05_loop_closed_window70_translation" `
+  --input-trajectory "outputs\stage3_rgbd_vo_full_guarded_scale05\estimated_camera_trajectory.txt" `
+  --apply-loop-closure
+```
+
+Measured loop-closure probes on the full half-scale trajectory:
+
+| Output | Translation RMSE |
+|---|---:|
+| raw `outputs/stage3_rgbd_vo_full_guarded_scale05/` | 8.4356 |
+| `outputs/stage3_rgbd_vo_full_guarded_scale05_loop_closed_window30_translation/` | 7.3352 |
+| `outputs/stage3_rgbd_vo_full_guarded_scale05_loop_closed_window50_translation/` | 6.5310 |
+| `outputs/stage3_rgbd_vo_full_guarded_scale05_loop_closed_window70_translation/` | 6.4475 |
+| `outputs/stage3_rgbd_vo_full_guarded_scale05_loop_closed_window100_translation/` | 6.8768 |
+
+Earlier full-trajectory closure with rotation correction worsened RMSE, so
+rotation correction is not enabled by default. This loop closure is a setup
+baseline and was later superseded by the pose-graph implementation documented
+below.
+
+Historical local test result after this update:
+
+```text
+48 passed at that point; latest result is 76 passed in the 2026-06-21 update.
+```
+
+Added a detailed Stage 3 TODO document:
+
+```text
+docs/STAGE3_TODO.md
+```
+
+It originally broke down the remaining work into visual loop-edge estimation,
+pose graph representation, pose graph optimization, evaluation/comparison, and
+official evaluator wrapping. Those items are now complete.
+
+## Stage 3 Completion Update - 2026-06-21
+
+Stage 3 is complete for the current assignment scope. The promoted result is:
+
+```text
+outputs/stage3_pose_graph_keyframe_stride8_nfev50/
+```
+
+Key facts:
+
+- Full sequence: 4,396 frames.
+- Optimized graph: 552 keyframe nodes, 551 odometry edges, 1 loop edge.
+- Official ATE: `3.030521`.
+- Internal translation RMSE: `5.242974`.
+- Older full-node pose graph official ATE: `3.616357`.
+- Raw VO official ATE from the same run family: `3.70073`.
+
+The key Stage 3 implementation files are:
+
+```text
+src/sfm_reconstruction/stage3.py
+src/sfm_reconstruction/pose_graph.py
+src/sfm_reconstruction/official_eval.py
+src/sfm_reconstruction/stage3_visualize.py
+src/sfm_reconstruction/stage3_open3d_viewer.py
+src/sfm_reconstruction/_tum_eval/associate.py
+```
+
+The Stage 3 visualization outputs include:
+
+```text
+outputs/stage3_pose_graph_keyframe_stride8_nfev50/trajectory_comparison.png
+outputs/stage3_pose_graph_keyframe_stride8_nfev50/stage3_scene_dense_voxel.ply
+outputs/stage3_pose_graph_keyframe_stride8_nfev50/stage3_scene_gt_pose_dense.ply
+outputs/stage3_pose_graph_keyframe_stride8_nfev50/stage3_scene_est_pose_dense.ply
+outputs/stage3_pose_graph_keyframe_stride8_nfev50/stage3_scene_est_pose_dense_aligned_to_gt.ply
+```
+
+The aligned estimated scene cloud is diagnostic only because it uses
+`gt_camera_trajectory.txt` to compute a similarity transform into the GT frame.
+The valid GT-free reconstruction view is the scene fused directly from
+`estimated_camera_trajectory_pose_graph.txt`.
+
+Latest full test result:
+
+```text
+76 passed
+```
+
+Recommended next research step: learned matching as an optional augmentation
+for all stages. Stage 3 loop closure is the first high-value target because
+better distinct loop constraints are the most plausible path to further ATE
+improvement. Stage 2 can use learned matching for object coverage and
+wide-baseline robustness. Stage 1 can use it as an ablation against supplied
+correspondences. Gaussian Splatting is best treated as a downstream rendering
+demo after poses are stable.
+
+## Stage 2 Learned Wide-Baseline Update - 2026-08-07
+
+Implemented an optional DINOv2 retrieval plus SuperPoint/LightGlue verification
+path for nonlocal Stage 2 pairs. It includes essential-matrix inlier ratio,
+spatial coverage, feature-level triangle-cycle filtering, a retrieved-edge
+degree cap, and per-pair conflict/rejection diagnostics in
+`matching_cache/pair_diagnostics.csv`.
+
+The conservative milk run added 15 distributed wide pairs. Compared with the
+local learned threshold-0.2 run, conflicts were `2,968` versus `2,645`, mean
+translation error was `0.06427` versus `0.06275`, and the full-cloud
+nearest-mesh-vertex proxy was `0.02539` versus `0.01510`. Its p90 reprojection error improved from
+`3.667 px` to `3.176 px`, but the overall result does not pass the promotion
+gate. The unrestricted 77-pair run was worse still, with `3,898` conflicts.
+
+Added `sfm_reconstruction.stage2_evaluation`, which writes the historical milk
+mesh-proxy metrics to `stage2_mesh_proxy.json`. Boot and dense fusion were not
+regenerated because sparse pose and mesh-proxy quality did not stabilize or
+improve. Keep the local learned run as the current learned Stage 2 experiment;
+keep balanced SIFT as the promoted Stage 2 result.
+
+## Stage 2 Pose-Only Learned Constraint Update - 2026-08-07
+
+Added `--wide-pose-only`. Retrieved correspondences are stored separately and
+used only to estimate relative-pose edges; the local learned track graph remains
+unchanged. A strict GT-free consistency gate retained one edge (`84 -> 1387`,
+340 inliers), followed by robust pose-graph optimization, retriangulation, and
+local bundle adjustment.
+
+The one-edge milk run produced 2,128 points, mean/median rotation errors of
+`6.736/4.935` degrees, median/p90 reprojection errors of `0.753/1.906` px, mean
+translation error `0.06341`, and mesh proxy `0.01874`. A zero-weight control
+showed that the learned edge improves rotation, translation, and mesh quality
+relative to repeated triangulation/BA alone. However, the original local
+learned run remains better in translation (`0.06275`) and mesh proxy (`0.01510`).
+The pose-only result is therefore experimental; boot and dense fusion remain
+deferred.
+
+## Stage 1 Learned-Matching Ablation - 2026-08-07
+
+Completed a full 46-image ablation on the exact 366-pair supplied graph. Added
+`--matching-pair-source supplied`, all-pair learned cycle filtering, a supplied
+initial-pose correspondence override, optional supplied-plus-learned
+augmentation, and a reproducible wrapper for the supplied Chamfer metric.
+
+The best pure learned Chamfer was `0.6111` at LightGlue threshold 0.3, versus
+`0.5124` supplied. Its mean rotation/translation errors were `2.087` degrees
+and `0.1980`, versus `0.875` degrees and `0.0666` supplied. Cycle filtering
+reduced conflicts from `5,847` to `695`, but did not recover pose or Chamfer
+quality. Preserving supplied initialization and augmenting later pairs restored
+all cameras and 10,084 points, but still worsened pose and Chamfer.
+
+Conclusion: keep supplied correspondences as the promoted Stage 1 path. Keep
+the learned frontend as a reproducible negative ablation; further threshold
+tuning against box ground truth is not justified.
+
+## Stage 1 Fixed-Pose Learned Augmentation - 2026-08-07
+
+The negative replacement ablation led to a successful constrained integration.
+Added `sfm_reconstruction.stage1_augmentation`, which freezes the promoted
+supplied cameras and points, triangulates cycle-filtered learned tracks in at
+least three views, optimizes only each new point, and applies strict cheirality,
+reprojection, triangulation-angle, pair-consistency, bounds, and duplicate
+checks.
+
+The promoted augmentation is:
+
+```text
+outputs/stage1_box_fixed_pose_learned_augmentation/
+```
+
+It accepts 1,142 of 4,640 learned tracks and increases the cloud from 5,746 to
+6,888 points. GT-to-estimate distance improves from `0.40805` to `0.40171`,
+estimate-to-GT from `0.10437` to `0.10291`, and total Chamfer from `0.51242` to
+`0.50461`. Camera poses are copied from the promoted supplied result, so its
+`0.875` degree mean rotation and `0.0666` mean translation remain unchanged.
+Promote this as a learned point-cloud augmentation, not as a learned replacement
+for supplied Stage 1 correspondences.
