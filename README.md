@@ -1,383 +1,216 @@
-# Incremental SfM Reconstruction
+# SfM Recon: Geometry to Gaussian Splatting
 
-A clean Python implementation of a calibrated multi-view 3D reconstruction
-pipeline. The project reconstructs camera poses and point clouds from object
-image sequences, starting either from supplied 2D correspondences or from
-detected image features.
+[![CI](https://github.com/humma-humma/sfm_recon/actions/workflows/ci.yml/badge.svg)](https://github.com/humma-humma/sfm_recon/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Tests: 123](https://img.shields.io/badge/tests-123%20passing-brightgreen.svg)](tests)
 
-The strongest focus is the geometric reconstruction stack: feature matching,
-track building, pose estimation, triangulation, bundle adjustment, dense point
-fusion, diagnostics, and visualization.
+![SfM Recon portfolio banner](assets/portfolio/github_social_preview.png)
 
-## Highlights
+A from-scratch, calibrated 3D reconstruction system spanning incremental
+Structure-from-Motion, learned feature experiments, RGB-D SLAM, pose-graph loop
+closure, dense fusion, and fixed-pose Gaussian splatting.
 
-- Incremental Structure-from-Motion from calibrated image sets.
-- Stage 1 support for supplied pairwise correspondences.
-- Stage 2 support for SIFT/RootSIFT features with optional AKAZE augmentation.
-- Custom mutual nearest-neighbor descriptor matching and geometric filtering.
-- Conflict-aware multi-view track construction.
-- Essential-matrix initialization, PnP camera registration, triangulation, and
-  cheirality/reprojection/angle filtering.
-- Robust sparse bundle adjustment with SciPy `least_squares`.
-- AprilTag masking and scene-relative pruning to suppress calibration-board and
-  distant weak-geometry artifacts.
-- Dense stereo fusion from recovered SfM poses, with pair scoring and dense
-  coverage diagnostics.
-- Rich PLY export with RGB, track length, reprojection error, and triangulation
-  angle metadata.
-- Reprojection residual CSVs and measured-vs-projected overlay images.
-- Open3D, Matplotlib, and Blender visualization paths.
-- CLI entry points and a focused unit test suite.
+The project emphasizes the complete engineering path: correspondence filtering,
+track construction, camera registration, triangulation, nonlinear optimization,
+diagnostics, failure analysis, and presentation-quality rendering.
 
-## Demo Assets
+## Portfolio
 
-Generated Open3D demos are stored under `assets/demo/`.
+| Object reconstruction: milkbox and boot | Full-sequence SLAM: inside view |
+|---|---|
+| [![Object reconstruction timeline](assets/portfolio/object_reconstruction_timeline_contact_sheet.png)](assets/portfolio/object_reconstruction_timeline.mp4) | [![Inside-view SLAM timeline](assets/portfolio/slam_reconstruction_timeline_contact_sheet.png)](assets/portfolio/slam_reconstruction_timeline.mp4) |
+| [21-second timeline](assets/portfolio/object_reconstruction_timeline.mp4) | [98-second progression and cleaned-splat loop](assets/portfolio/slam_reconstruction_timeline.mp4) |
 
-| Scene | Poster | Video |
-|---|---|---|
-| Boot dense reconstruction | ![Boot dense Open3D render](assets/demo/boot_dense_open3d.png) | [MP4](assets/demo/boot_dense_open3d.mp4) |
-| Milk dense reconstruction | ![Milk dense Open3D render](assets/demo/milk_dense_open3d.png) | [MP4](assets/demo/milk_dense_open3d.mp4) |
+The [exterior-view SLAM alternate](assets/portfolio/slam_reconstruction_outside_timeline.mp4)
+holds the original classical orbit fixed across every point cloud and Gaussian
+checkpoint. Its [contact sheet](assets/portfolio/slam_reconstruction_outside_timeline_contact_sheet.png)
+verifies frame-aligned method transitions.
 
-Regenerate the boot demo:
+## Six demonstrated outcomes
 
-```powershell
-$env:PYTHONPATH = "src"
-& $python_open3d -m sfm_reconstruction.demo_video `
-  --result-dir "outputs\stage2_boot_sift_akaze_probe" `
-  --point-cloud "outputs\stage2_boot_sift_akaze_probe\dense_points_allpairs_cleaned.ply" `
-  --output "assets\demo\boot_dense_open3d.mp4" `
-  --poster-output "assets\demo\boot_dense_open3d.png" `
-  --width 960 `
-  --height 540 `
-  --fps 20 `
-  --seconds 6 `
-  --point-size 2.0 `
-  --zoom 0.62 `
-  --trim-percentile 2 `
-  --no-cameras
+| Demonstration | Input | Progression | Outcome |
+|---|---|---|---|
+| Supplied-correspondence SfM | Calibrated Stage 1 images | Classical reconstruction -> fixed-pose learned augmentation | More accepted geometry without changing promoted cameras |
+| Milkbox reconstruction | Multi-view RGB | Balanced SIFT -> SuperPoint + LightGlue -> 30k splat | Detailed object and surrounding table |
+| Boot reconstruction | Multi-view RGB | Balanced SIFT -> fixed-pose 30k splat | Strong object reconstruction at reduced training resolution |
+| RGB-D visual odometry | Full indoor/outdoor sequence | Guarded VO -> full pose graph | Complete tracked trajectory with reduced drift |
+| Learned loop recovery | RGB-D keyframes | DINOv2 retrieval -> local verification -> keyframe graph | Automatically recovered the promoted loop constraint |
+| Full-scene rendering | Fixed SLAM poses | 1k -> 5k -> support cleanup | Cleaned Gaussian scene plus complete showcase loop |
+
+## System overview
+
+```mermaid
+flowchart LR
+    A[Calibrated RGB / RGB-D] --> B[Features and matching]
+    B --> C[Conflict-aware tracks]
+    C --> D[Essential matrix / PnP]
+    D --> E[Triangulation]
+    E --> F[Bundle adjustment]
+    D --> G[RGB-D odometry]
+    G --> H[Loop retrieval and verification]
+    H --> I[Pose-graph optimization]
+    F --> J[Dense fusion]
+    I --> J
+    F --> K[Fixed-pose Gaussian export]
+    I --> K
+    K --> L[Splat training and support cleanup]
 ```
 
-Regenerate the milk demo:
+Core capabilities include:
 
-```powershell
-$env:PYTHONPATH = "src"
-& $python_open3d -m sfm_reconstruction.demo_video `
-  --result-dir "outputs\stage2_milk_sift_akaze_probe" `
-  --point-cloud "outputs\stage2_milk_sift_akaze_probe\dense_points_allpairs_cleaned.ply" `
-  --output "assets\demo\milk_dense_open3d.mp4" `
-  --poster-output "assets\demo\milk_dense_open3d.png" `
-  --width 960 `
-  --height 540 `
-  --fps 20 `
-  --seconds 6 `
-  --point-size 2.0 `
-  --zoom 0.62 `
-  --trim-percentile 2 `
-  --no-cameras
+- SIFT, RootSIFT, AKAZE, and optional SuperPoint + LightGlue matching.
+- Essential-matrix initialization and incremental PnP registration.
+- Conflict-aware track building with cheirality, reprojection, and angle gates.
+- Sparse bundle adjustment with robust SciPy least squares.
+- RGB-D visual odometry, DINOv2 place retrieval, loop verification, and pose graphs.
+- OpenCV dense fusion and metadata-rich PLY export.
+- COLMAP-compatible fixed-pose exports for Nerfstudio Splatfacto.
+- Support-aware Gaussian cleanup and matched inside/exterior portfolio rendering.
+
+See [Architecture](docs/ARCHITECTURE.md) for the data model and execution paths.
+
+## Verified results
+
+| Experiment | Result | Interpretation |
+|---|---:|---|
+| Stage 1 supplied baseline | Chamfer `0.51242` | Promoted classical camera solution |
+| Stage 1 fixed-pose learned augmentation | Chamfer `0.50461`; +1,142 points | Learned geometry helps when camera poses remain fixed |
+| Stage 3 guarded raw VO | ATE `3.70073` | Complete but drifting trajectory |
+| Stage 3 full pose graph | ATE `3.6164` | Modest global correction |
+| Stage 3 keyframe pose graph | ATE `3.030521` | Promoted trajectory |
+| Learned automatic loop recovery | ATE held at `3.0305` | Retrieval recovers the useful loop without overstating metric gain |
+| Stage 3 Gaussian cleanup | Presentation improvement | Removes unsupported noise; does not change trajectory accuracy |
+
+These are not cherry-picked as a universal learned-over-classical result.
+Several learned matching and unrestricted splat-training variants were worse;
+those negative findings are documented in [Results](docs/RESULTS.md) and
+[Limitations](docs/LIMITATIONS.md).
+
+## Quick start
+
+```bash
+git clone https://github.com/humma-humma/sfm_recon.git
+cd sfm_recon
+python -m venv .venv
 ```
 
-## Verified Results
+Activate the environment, then install the core package and test tooling:
 
-| Run | Registered cameras | Sparse points | Key metric |
-|---|---:|---:|---|
-| Stage 1 box regression | 46 / 46 | 5,746 | Mean rotation error `0.875 deg`, mean translation error `0.0666` |
-| Stage 2 milk, balanced SIFT | 50 / 50 | 1,739 | Mean rotation error `6.779 deg`, mean translation error `0.0625` |
-| Stage 2 milk, four-view tracks | 50 / 50 | 961 | Mean rotation error `6.507 deg`, mean translation error `0.0610` |
-| Stage 2 boot, conservative output | 51 / 51 | 1,254 | No full boot pose ground truth available |
-| Stage 2 boot, SIFT+AKAZE coverage probe | 51 / 51 | 5,291 | 79,872 cleaned dense points |
-| Stage 2 milk, SIFT+AKAZE coverage probe | 50 / 50 | 8,004 | 63,938 cleaned dense points |
+```bash
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev,evaluation,visualization]"
+python -m pytest -q -p no:cacheprovider
+```
 
-Additional validation notes:
+Optional components:
 
-- Balanced milk reduced the nearest-mesh-vertex proxy error from `0.0667` to
-  `0.0204` versus the original Stage 2 run.
-- Four-view milk reached a nearest-mesh-vertex proxy error of `0.0162`.
-- The all-pairs SIFT+AKAZE milk dense cloud reached mean/median proxy distance
-  `0.0123` / `0.0100`, with `98.25%` of points within `0.05` of the supplied
-  validation mesh.
-- Reprojection diagnostics for SIFT+AKAZE runs:
-  - Boot: 16,643 observations, median error `0.388 px`, p90 `1.304 px`.
-  - Milk: 26,522 observations, median error `0.335 px`, p90 `1.098 px`.
+```bash
+python -m pip install -e ".[open3d]"   # interactive point-cloud rendering
+python -m pip install -e ".[learned]"  # PyTorch/Kornia learned frontends
+```
 
-Boot is the submission-style sequence and does not include complete ground
-truth poses, so boot quality is assessed through reconstruction consistency,
-camera registration, dense coverage, reprojection diagnostics, and visual
-inspection.
+Confirm the primary entry point:
 
-## Pipeline
+```bash
+sfm-reconstruct --help
+```
+
+## Run a reconstruction
+
+Stage 2 image-based reconstruction:
+
+```bash
+sfm-reconstruct \
+  --stage 2 \
+  --dataset /path/to/stage2/milk \
+  --output-dir outputs/milk \
+  --feature-mode sift \
+  --max-features 2500 \
+  --mask-apriltags \
+  --min-track-observations 3 \
+  --bundle-adjustment-max-nfev 20
+```
+
+The output contains:
 
 ```text
-RGB images + intrinsics
-  -> feature extraction or supplied correspondences
-  -> descriptor matching and essential-matrix filtering
-  -> conflict-aware multi-view tracks
-  -> initial relative pose and triangulation
-  -> incremental PnP camera registration
-  -> new-point triangulation and filtering
-  -> robust global bundle adjustment
-  -> sparse/rich PLY, camera JSON, metrics, diagnostics
-  -> dense stereo fusion and cleaned presentation clouds
+estimated_camera_parameters.json
+estimated_points.ply
+estimated_points_rich.ply
+summary.json
 ```
 
-## Repository Layout
+Stage 3 RGB-D smoke run:
+
+```bash
+sfm-stage3-setup \
+  --dataset /path/to/stage3 \
+  --output-dir outputs/stage3_smoke \
+  --max-frames 500 \
+  --run-rgbd-odometry
+```
+
+Datasets are intentionally not redistributed. See [Datasets](docs/DATASETS.md)
+for required layouts and [Reproduction](docs/REPRODUCTION.md) for the full
+classical, learned, SLAM, and Gaussian workflows.
+
+## Repository map
 
 ```text
 src/sfm_reconstruction/
-  cli.py                         Main reconstruction CLI
-  matching.py                    SIFT, AKAZE, matching, masks, pair graph
-  tracks.py                      Multi-view track construction
-  geometry.py                    Essential pose, triangulation, PnP, errors
-  reconstruction.py              Incremental SfM backend
-  bundle_adjustment.py           Robust sparse bundle adjustment
-  dense_fusion.py                Stereo fusion from recovered poses
-  point_cloud_cleanup.py         Open3D outlier filtering/downsampling
-  reprojection_diagnostics.py    Residual CSVs and image overlays
-  stage3.py                      Stage 3 RGB-D SLAM dataset setup helpers
-  open3d_viewer.py               Interactive Open3D viewer
-  demo_video.py                  Open3D orbit MP4 renderer
-  blender_viewer.py              Blender scene generation
-tests/                           Unit tests for core geometry and IO paths
+  geometry.py                 projection, pose, and triangulation primitives
+  matching.py                 classical/learned matching and pair filtering
+  tracks.py                   multi-view track construction
+  reconstruction.py           incremental SfM orchestration
+  bundle_adjustment.py        robust sparse BA
+  dense_fusion.py             stereo-based dense fusion
+  stage3.py                   RGB-D odometry and trajectory processing
+  pose_graph.py               loop constraints and graph optimization
+  stage3_*gaussian*.py        splat export, diagnostics, seeds, and cleanup
+  stage3_portfolio_video.py   frame-synchronized portfolio rendering
+tests/                        123 deterministic unit tests
+docs/                         architecture, results, data, and reproduction
+assets/portfolio/             three curated presentation videos
 ```
 
-The legacy notebooks/scripts and assignment data live outside this package and
-are not imported by the implementation.
+## Documentation
 
-## Environment
+- [Architecture and data flow](docs/ARCHITECTURE.md)
+- [Verified experiments and provenance](docs/RESULTS.md)
+- [Reproduction guide](docs/REPRODUCTION.md)
+- [Dataset layouts](docs/DATASETS.md)
+- [Gaussian splatting workflow](docs/GAUSSIAN_SPLATTING.md)
+- [Learned matching experiments](docs/LEARNING_BASED_AUGMENTATION.md)
+- [Limitations and next steps](docs/LIMITATIONS.md)
+- [Historical development log](docs/DEVELOPMENT_LOG.md)
 
-Known working interpreters on this machine:
+## Testing and reproducibility
 
-```powershell
-$python = "C:\Users\mopu01\AppData\Local\anaconda3\envs\mardm\python.exe"
-$python_open3d = "C:\Users\mopu01\AppData\Local\anaconda3\envs\mardm_open3d\python.exe"
+The CPU test suite covers geometry, matching, tracks, reconstruction, bundle
+adjustment interfaces, trajectory IO/evaluation, pose graphs, splat export and
+cleanup, and synchronized video-path mathematics. GPU training is deliberately
+excluded from CI.
+
+```bash
+python -m pytest -q -p no:cacheprovider
+python -m build
 ```
 
-For a fresh environment:
+GitHub Actions runs the test suite on Python 3.10 and 3.11 and builds the wheel
+on every push and pull request.
 
-```powershell
-python -m pip install -e .[dev,evaluation,visualization]
-python -m pip install -e .[open3d]
-```
+## Scope and limitations
 
-The dataset folders are local inputs and are intentionally not part of this
-package. Commands below assume the same local directory structure used during
-development.
+- The datasets and trained Gaussian checkpoints are not redistributed.
+- Learned matching is an optional augmentation, not a guaranteed improvement.
+- Stage 3 remains weak around stairs and sparsely observed surroundings.
+- Gaussian cleanup improves presentation rather than pose metrics.
+- The current implementation prioritizes clarity and diagnostics over real-time speed.
 
-## Run Reconstruction
+See [Limitations](docs/LIMITATIONS.md) for the complete discussion.
 
-Stage 1 calibrated correspondence regression:
+## License and citation
 
-```powershell
-$env:PYTHONPATH = "src"
-& $python -m sfm_reconstruction `
-  --dataset "..\Experiments\Stage_1_Data_ver._4\Stage_1_Data_ver_4\stage1\box" `
-  --output-dir "outputs\stage1_box_filter_regression" `
-  --bundle-adjustment-max-nfev 20
-```
-
-Stage 2 milk balanced validation:
-
-```powershell
-$env:PYTHONPATH = "src"
-& $python -m sfm_reconstruction `
-  --stage 2 `
-  --dataset "..\Experiments\Stage_2_Data\stage2\milk" `
-  --output-dir "outputs\stage2_milk_masked_track3_ba" `
-  --max-features 2500 `
-  --mask-apriltags `
-  --min-track-observations 3 `
-  --max-point-distance-factor 1.5 `
-  --bundle-adjustment-max-nfev 20
-```
-
-Stage 2 boot conservative output:
-
-```powershell
-$env:PYTHONPATH = "src"
-& $python -m sfm_reconstruction `
-  --stage 2 `
-  --dataset "..\Experiments\Stage_2_Data\stage2\boot" `
-  --output-dir "outputs\stage2_boot_improved" `
-  --max-features 2500 `
-  --mask-apriltags `
-  --min-track-observations 3 `
-  --max-point-distance-factor 1.5 `
-  --bundle-adjustment-max-nfev 20
-```
-
-Stage 2 boot coverage-focused SIFT+AKAZE run:
-
-```powershell
-$env:PYTHONPATH = "src"
-& $python_open3d -m sfm_reconstruction `
-  --stage 2 `
-  --dataset "..\Experiments\Stage_2_Data\stage2\boot" `
-  --output-dir "outputs\stage2_boot_sift_akaze_probe" `
-  --max-features 3000 `
-  --feature-mode "sift+akaze" `
-  --sift-contrast-threshold 0.015 `
-  --sift-edge-threshold 12 `
-  --mask-apriltags `
-  --min-track-observations 2 `
-  --two-view-min-triangulation-angle 10 `
-  --two-view-max-reprojection-error 2 `
-  --max-point-distance-factor 1.5 `
-  --bundle-adjustment-max-nfev 20 `
-  --write-reprojection-diagnostics `
-  --reprojection-overlay-limit 300
-```
-
-Each reconstruction output contains:
-
-- `estimated_camera_parameters.json`
-- `estimated_points.ply`
-- `estimated_points_rich.ply`
-- `summary.json`
-
-## Stage 3 Setup
-
-Stage 3 is the optional RGB-D SLAM trajectory task. The setup helper validates
-the assignment layout and can run a first-pass RGB-D visual odometry baseline:
-
-```powershell
-$env:PYTHONPATH = "src"
-& $python -m sfm_reconstruction.stage3 `
-  --dataset "..\stage3" `
-  --output-dir "outputs\stage3_rgbd_vo_subset500_fullres" `
-  --max-frames 500 `
-  --run-rgbd-odometry `
-  --max-features 1800 `
-  --min-matches 20 `
-  --min-pnp-inliers 8
-```
-
-The baseline reuses the Stage 1/2 matching and geometry utilities: feature
-matching, depth backprojection, PnP, and trajectory export. It writes
-`estimated_camera_trajectory.txt`, `rgbd_odometry_report.csv`, and
-`trajectory_metrics.json` when ground truth is present. The current tuned
-full-resolution 500-frame probe tracks 499 / 499 frame transitions with
-translation RMSE `0.2166`; the 1000-frame probe tracks 999 / 999 with RMSE
-`0.7587`. Full-sequence visual odometry still drifts without loop closure.
-More details are in `docs/STAGE3_SETUP.md`.
-
-Stage 3 loop-edge discovery also supports an optional learned correspondence
-frontend with `--loop-matcher superpoint-lightglue`. It changes only feature
-matching; RGB-D geometric verification and pose-graph optimization remain the
-same. See `docs/LEARNING_BASED_AUGMENTATION.md` for installation and the
-benchmark command.
-
-Full-sequence learned place recognition is available with
-`--loop-candidate-mode dinov2`. DINOv2 retrieval plus local endpoint refinement
-recovers the promoted `4387 -> 32` loop automatically; no second distinct loop
-improved the official result in the current benchmark.
-
-Loop-closure post-processing is available for trajectories where the sequence
-returns near the start:
-
-```powershell
-$env:PYTHONPATH = "src"
-& $python -m sfm_reconstruction.stage3 `
-  --dataset "..\Experiments\Stage_3_Data\stage3" `
-  --output-dir "outputs\stage3_rgbd_vo_full_guarded_scale05_loop_closed_window70_translation" `
-  --input-trajectory "outputs\stage3_rgbd_vo_full_guarded_scale05\estimated_camera_trajectory.txt" `
-  --apply-loop-closure
-```
-
-## Dense Fusion
-
-Use the estimated cameras as a pose backbone for OpenCV stereo fusion:
-
-```powershell
-$env:PYTHONPATH = "src"
-& $python_open3d -m sfm_reconstruction.dense_fusion `
-  --dataset "..\Experiments\Stage_2_Data\stage2\boot" `
-  --result-dir "outputs\stage2_boot_sift_akaze_probe" `
-  --output "outputs\stage2_boot_sift_akaze_probe\dense_points_allpairs_filtered.ply" `
-  --image-scale 0.25 `
-  --max-pair-step 2 `
-  --sample-stride 2 `
-  --max-sparse-distance 0.2
-```
-
-Clean the dense point cloud for presentation:
-
-```powershell
-$env:PYTHONPATH = "src"
-& $python_open3d -m sfm_reconstruction.point_cloud_cleanup `
-  --input "outputs\stage2_boot_sift_akaze_probe\dense_points_allpairs_filtered.ply" `
-  --output "outputs\stage2_boot_sift_akaze_probe\dense_points_allpairs_cleaned.ply" `
-  --statistical-neighbors 20 `
-  --statistical-std-ratio 2.0 `
-  --voxel-size 0.005
-```
-
-Dense runs write:
-
-- `*.summary.json`
-- `*.pairs.csv`
-- `*.pair_heatmap.csv`
-- `*.cameras.csv`
-- `*.spatial_density.csv`
-
-## Visualization
-
-Matplotlib static view:
-
-```powershell
-$env:PYTHONPATH = "src"
-& $python -m sfm_reconstruction.visualize `
-  --result-dir "outputs\stage2_boot_improved"
-```
-
-Interactive Open3D viewer:
-
-```powershell
-$env:PYTHONPATH = "src"
-& $python_open3d -m sfm_reconstruction.open3d_viewer `
-  --result-dir "outputs\stage2_boot_sift_akaze_probe" `
-  --point-cloud "outputs\stage2_boot_sift_akaze_probe\dense_points_allpairs_cleaned.ply" `
-  --color-mode rgb
-```
-
-Blender scene export:
-
-```powershell
-$env:PYTHONPATH = "src"
-& $python -m sfm_reconstruction.blender_viewer `
-  --result-dir "outputs\stage2_boot_improved" `
-  --trim-percentile 0
-```
-
-Open3D color modes for sparse rich PLYs:
-
-```text
-rgb
-track_length
-reprojection_error
-triangulation_angle
-height
-```
-
-## Tests
-
-```powershell
-$env:PYTHONPATH = "src"
-$env:PYTHONDONTWRITEBYTECODE = "1"
-& $python_open3d -m pytest -q -p no:cacheprovider
-```
-
-Latest local verification: `48 passed`. The video-renderer helper tests add
-coverage for Open3D demo asset generation without requiring a render window,
-and the Stage 3 tests cover RGB-D layout validation, trajectory IO, odometry
-reports, trajectory metrics, RGB-D rigid-transform helpers, and loop-closure
-post-processing.
-
-
-## Planned extensions:
-
-- Continue benchmarking the implemented SuperPoint+LightGlue frontend on boot
-  and wider Stage 3 loop windows; the initial milk and Stage 3 results are
-  documented in `docs/LEARNING_BASED_AUGMENTATION.md`.
-- Add mesh reconstruction from dense fused points using Poisson or ball-pivoting
-  surface reconstruction.
-- Export SfM cameras/points to a COLMAP-style layout and train a small 3D
-  Gaussian Splatting demo initialized from this reconstruction.
+Released under the [MIT License](LICENSE). If this repository supports your
+work, cite it using [CITATION.cff](CITATION.cff).

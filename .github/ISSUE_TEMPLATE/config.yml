@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Dataset availability
+    url: https://github.com/humma-humma/sfm_recon/blob/main/docs/DATASETS.md
+    about: Read the data policy before requesting dataset help.

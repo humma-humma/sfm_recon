@@ -7,3 +7,28 @@ outputs/
 .matplotlib*/
 assets/demo/_*
 deliverables/*.zip
+*.egg-info/
+build/
+dist/
+*.whl
+.coverage
+htmlcov/
+.venv/
+.env
+datasets/
+data/
+*.ckpt
+*.pth
+*.pt
+
+# Keep local editing footage out of Git. Only the curated portfolio exports
+# below are published with the repository.
+assets/portfolio/*
+!assets/portfolio/README.md
+!assets/portfolio/object_reconstruction_timeline.mp4
+!assets/portfolio/object_reconstruction_timeline_contact_sheet.png
+!assets/portfolio/slam_reconstruction_timeline.mp4
+!assets/portfolio/slam_reconstruction_timeline_contact_sheet.png
+!assets/portfolio/slam_reconstruction_outside_timeline.mp4
+!assets/portfolio/slam_reconstruction_outside_timeline_contact_sheet.png
+!assets/portfolio/github_social_preview.png

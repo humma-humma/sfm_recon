@@ -33,25 +33,51 @@ def trim_point_table(table: PlyTable, percentile: float) -> PlyTable:
     return PlyTable(table.property_names, table.values[in_bounds])
 
 
-def orbit_front(frame_index: int, frame_count: int, base_front: np.ndarray) -> np.ndarray:
+def orbit_front(
+    frame_index: int,
+    frame_count: int,
+    base_front: np.ndarray,
+    up: np.ndarray | None = None,
+) -> np.ndarray:
     front = np.asarray(base_front, dtype=np.float64)
     norm = float(np.linalg.norm(front))
     if norm <= 0.0:
         raise ValueError("base_front must be nonzero")
     front = front / norm
+    axis = np.array([0.0, 0.0, 1.0]) if up is None else np.asarray(up, dtype=np.float64)
+    axis_norm = float(np.linalg.norm(axis))
+    if axis_norm <= 0.0:
+        raise ValueError("up must be nonzero")
+    axis = axis / axis_norm
 
-    xy_norm = float(np.linalg.norm(front[:2]))
-    if xy_norm <= 1e-9:
-        angle = 2.0 * np.pi * frame_index / max(frame_count, 1)
-        rotated = np.array([np.cos(angle), np.sin(angle), front[2]], dtype=np.float64)
-    else:
-        base_angle = np.arctan2(front[1], front[0])
-        angle = base_angle + 2.0 * np.pi * frame_index / max(frame_count, 1)
-        rotated = np.array(
-            [xy_norm * np.cos(angle), xy_norm * np.sin(angle), front[2]],
-            dtype=np.float64,
-        )
+    angle = 2.0 * np.pi * frame_index / max(frame_count, 1)
+    rotated = (
+        front * np.cos(angle)
+        + np.cross(axis, front) * np.sin(angle)
+        + axis * np.dot(axis, front) * (1.0 - np.cos(angle))
+    )
     return rotated / np.linalg.norm(rotated)
+
+
+def camera_orbit_basis(poses: dict, center: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    ordered = [pose for _, pose in sorted(poses.items())]
+    if not ordered:
+        raise ValueError("camera-oriented rendering requires camera poses")
+
+    camera_down = np.asarray(
+        [pose.rotation.T @ np.array([0.0, 1.0, 0.0]) for pose in ordered]
+    )
+    up = -np.mean(camera_down, axis=0)
+    up_norm = float(np.linalg.norm(up))
+    if up_norm <= 1e-9:
+        raise ValueError("could not estimate a stable camera up direction")
+    up = up / up_norm
+
+    front = ordered[0].camera_center - np.asarray(center, dtype=np.float64)
+    front_norm = float(np.linalg.norm(front))
+    if front_norm <= 1e-9:
+        raise ValueError("first camera is too close to the scene center")
+    return up, front / front_norm
 
 
 def _build_geometries(
@@ -114,6 +140,9 @@ def render_orbit_video(
     show_frustums: bool = True,
     frustum_scale: float | None = None,
     visible: bool = False,
+    camera_oriented: bool = False,
+    up_vector: np.ndarray | None = None,
+    front_vector: np.ndarray | None = None,
 ) -> None:
     import cv2
 
@@ -162,7 +191,24 @@ def render_orbit_video(
         center = bbox.get_center()
         view_control = vis.get_view_control()
         view_control.set_lookat(center)
-        view_control.set_up(np.array([0.0, 0.0, 1.0]))
+        up = np.array([0.0, 0.0, 1.0])
+        base_front = np.array([0.45, -0.78, -0.43], dtype=np.float64)
+        if camera_oriented:
+            if up_vector is not None or front_vector is not None:
+                raise ValueError(
+                    "--camera-oriented cannot be combined with --up or --front"
+                )
+            camera_path = result_dir / "estimated_camera_parameters.json"
+            if not camera_path.is_file():
+                raise ValueError("--camera-oriented requires estimated camera parameters")
+            _, poses = load_camera_parameters(camera_path)
+            up, base_front = camera_orbit_basis(poses, center)
+        else:
+            if up_vector is not None:
+                up = np.asarray(up_vector, dtype=np.float64)
+            if front_vector is not None:
+                base_front = np.asarray(front_vector, dtype=np.float64)
+        view_control.set_up(up)
         view_control.set_zoom(zoom)
 
         writer = cv2.VideoWriter(
@@ -174,9 +220,10 @@ def render_orbit_video(
         if not writer.isOpened():
             raise RuntimeError(f"Could not open video writer for {output}")
         try:
-            base_front = np.array([0.45, -0.78, -0.43], dtype=np.float64)
             for frame_index in range(frame_count):
-                view_control.set_front(orbit_front(frame_index, frame_count, base_front))
+                view_control.set_front(
+                    orbit_front(frame_index, frame_count, base_front, up=up)
+                )
                 vis.poll_events()
                 vis.update_renderer()
                 image = np.asarray(vis.capture_screen_float_buffer(do_render=True))
@@ -221,6 +268,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-cameras", action="store_true")
     parser.add_argument("--no-frustums", action="store_true")
     parser.add_argument("--visible", action="store_true")
+    parser.add_argument(
+        "--camera-oriented",
+        action="store_true",
+        help="Estimate upright orientation and orbit phase from recovered cameras.",
+    )
+    parser.add_argument("--up", nargs=3, type=float, metavar=("X", "Y", "Z"))
+    parser.add_argument("--front", nargs=3, type=float, metavar=("X", "Y", "Z"))
     return parser
 
 
@@ -243,6 +297,9 @@ def main(argv: list[str] | None = None) -> None:
         show_frustums=not args.no_frustums,
         frustum_scale=args.frustum_scale,
         visible=args.visible,
+        camera_oriented=args.camera_oriented,
+        up_vector=np.asarray(args.up) if args.up is not None else None,
+        front_vector=np.asarray(args.front) if args.front is not None else None,
     )
 
 

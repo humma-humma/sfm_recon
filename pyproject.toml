@@ -1,13 +1,31 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "sfm-reconstruction"
-version = "0.2.0"
+version = "1.0.0"
 description = "A reproducible incremental Structure-from-Motion pipeline."
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Monseej Purkayastha" }]
+keywords = [
+    "structure-from-motion",
+    "slam",
+    "computer-vision",
+    "gaussian-splatting",
+    "3d-reconstruction",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
 dependencies = [
     "numpy>=1.23",
     "opencv-python>=4.8",
@@ -15,7 +33,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "build>=1.2"]
 evaluation = [
     "trimesh>=3.23",
     "rtree>=1.0",
@@ -23,6 +41,11 @@ evaluation = [
 visualization = ["matplotlib>=3.7"]
 open3d = ["open3d>=0.19"]
 learned = ["torch>=2.0", "torchvision>=0.15", "kornia>=0.7"]
+
+[project.urls]
+Homepage = "https://github.com/humma-humma/sfm_recon"
+Repository = "https://github.com/humma-humma/sfm_recon"
+Issues = "https://github.com/humma-humma/sfm_recon/issues"
 
 [project.scripts]
 sfm-reconstruct = "sfm_reconstruction.cli:main"
@@ -38,6 +61,16 @@ sfm-stage3-open3d = "sfm_reconstruction.stage3_open3d_viewer:main"
 sfm-stage2-eval = "sfm_reconstruction.stage2_evaluation:main"
 sfm-stage1-eval = "sfm_reconstruction.stage1_evaluation:main"
 sfm-stage1-augment = "sfm_reconstruction.stage1_augmentation:main"
+sfm-export-gaussian = "sfm_reconstruction.gaussian_splatting_export:main"
+sfm-export-stage3-gaussian = "sfm_reconstruction.stage3_gaussian_splatting_export:main"
+sfm-stage3-splat-diagnostics = "sfm_reconstruction.stage3_splat_temporal_diagnostics:main"
+sfm-stage3-rebalance-seeds = "sfm_reconstruction.stage3_gaussian_seed_rebalance:main"
+sfm-stage3-balance-seeds-global = "sfm_reconstruction.stage3_gaussian_global_seed_balance:main"
+sfm-stage3-export-submaps = "sfm_reconstruction.stage3_gaussian_submaps:main"
+sfm-stage3-export-spatial-submaps = "sfm_reconstruction.stage3_gaussian_spatial_submaps:main"
+sfm-stage3-clean-splat = "sfm_reconstruction.stage3_gaussian_checkpoint_cleanup:main"
+sfm-stage3-trajectory-video = "sfm_reconstruction.stage3_trajectory_video:main"
+sfm-stage3-portfolio-video = "sfm_reconstruction.stage3_portfolio_video:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

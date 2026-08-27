@@ -23,17 +23,16 @@ as `qx qy qz qw`.
 
 ## Environment
 
-Use the Open3D-enabled environment for Stage 3 runs and visualization:
+Install the package and Open3D extra for Stage 3 runs and visualization:
 
 ```powershell
-$env:PYTHONPATH = "src"
-$python_open3d = "C:\Users\mopu01\AppData\Local\anaconda3\envs\mardm_open3d\python.exe"
+python -m pip install -e ".[open3d]"
 ```
 
 ## Validate A Dataset
 
 ```powershell
-& $python_open3d -m sfm_reconstruction.stage3 `
+sfm-stage3-setup `
   --dataset "..\Experiments\Stage_3_Data\stage3" `
   --output-dir "outputs\stage3_setup"
 ```
@@ -49,7 +48,7 @@ reference-depth PnP, and accumulated camera-to-world poses.
 Full-sequence half-scale baseline:
 
 ```powershell
-& $python_open3d -m sfm_reconstruction.stage3 `
+sfm-stage3-setup `
   --dataset "..\Experiments\Stage_3_Data\stage3" `
   --output-dir "outputs\stage3_rgbd_vo_full_guarded_scale05" `
   --run-rgbd-odometry `
@@ -86,7 +85,7 @@ Implemented:
 Current promoted run:
 
 ```powershell
-& $python_open3d -m sfm_reconstruction.stage3 `
+sfm-stage3-setup `
   --dataset "..\Experiments\Stage_3_Data\stage3" `
   --output-dir "outputs\stage3_pose_graph_keyframe_stride8_nfev50" `
   --input-trajectory "outputs\stage3_pose_graph_full\estimated_camera_trajectory.txt" `
@@ -130,7 +129,7 @@ the current Stage 3 final result.
 Static trajectory comparison:
 
 ```powershell
-& $python_open3d -m sfm_reconstruction.stage3_visualize `
+sfm-stage3-plot `
   --ground-truth "..\Experiments\Stage_3_Data\stage3\gt_camera_trajectory.txt" `
   --trajectory "Raw VO=outputs\stage3_pose_graph_full\estimated_camera_trajectory.txt" `
   --trajectory "Full pose graph=outputs\stage3_pose_graph_full\estimated_camera_trajectory_pose_graph.txt" `
@@ -141,7 +140,7 @@ Static trajectory comparison:
 Interactive trajectory viewer:
 
 ```powershell
-& $python_open3d -m sfm_reconstruction.stage3_open3d_viewer `
+sfm-stage3-open3d `
   --ground-truth "..\Experiments\Stage_3_Data\stage3\gt_camera_trajectory.txt" `
   --trajectory "Raw VO=outputs\stage3_pose_graph_full\estimated_camera_trajectory.txt" `
   --trajectory "Full pose graph=outputs\stage3_pose_graph_full\estimated_camera_trajectory_pose_graph.txt" `
@@ -151,7 +150,7 @@ Interactive trajectory viewer:
 Sampled RGB-D scene fused with the estimated trajectory:
 
 ```powershell
-& $python_open3d -m sfm_reconstruction.stage3_open3d_viewer `
+sfm-stage3-open3d `
   --dataset "..\Experiments\Stage_3_Data\stage3" `
   --scene-trajectory "outputs\stage3_pose_graph_keyframe_stride8_nfev50\estimated_camera_trajectory_pose_graph.txt" `
   --scene-frame-stride 10 `

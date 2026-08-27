@@ -1,17 +1,13 @@
 param(
-    [string]$Python = $env:SFM_PYTHON
+    [string]$Python = $env:SFM_PYTHON,
+    [switch]$Artifacts
 )
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")
 
 if ([string]::IsNullOrWhiteSpace($Python)) {
-    $LocalOpen3D = "C:\Users\mopu01\AppData\Local\anaconda3\envs\mardm_open3d\python.exe"
-    if (Test-Path -LiteralPath $LocalOpen3D) {
-        $Python = $LocalOpen3D
-    } else {
-        $Python = "python"
-    }
+    $Python = "python"
 }
 
 Push-Location -LiteralPath $RepoRoot
@@ -24,9 +20,11 @@ try {
         exit $LASTEXITCODE
     }
 
-    & $Python "scripts\verify_regression.py" --root "."
-    if ($LASTEXITCODE -ne 0) {
-        exit $LASTEXITCODE
+    if ($Artifacts) {
+        & $Python "scripts\verify_regression.py" --root "."
+        if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+        }
     }
 } finally {
     Pop-Location

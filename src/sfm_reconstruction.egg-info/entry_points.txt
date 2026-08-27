@@ -1,5 +1,0 @@
-[console_scripts]
-sfm-blender = sfm_reconstruction.blender_viewer:main
-sfm-open3d = sfm_reconstruction.open3d_viewer:main
-sfm-reconstruct = sfm_reconstruction.cli:main
-sfm-visualize = sfm_reconstruction.visualize:main
