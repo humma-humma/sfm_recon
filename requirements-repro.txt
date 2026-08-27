@@ -1,7 +1,7 @@
 # Portable verification environment. Optional Open3D and learned/GPU extras are
 # intentionally excluded; install them through pyproject extras when needed.
 numpy>=1.23,<3
-opencv-python>=4.8,<5
+opencv-python>=4.8,<6
 scipy>=1.10,<2
 pytest>=8,<9
 trimesh>=3.23,<5
