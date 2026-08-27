@@ -1,5 +1,5 @@
 import numpy as np
-import torch
+import pytest
 
 from sfm_reconstruction.stage3_gaussian_checkpoint_cleanup import (
     cleanup_mask,
@@ -23,6 +23,7 @@ def test_cleanup_mask_requires_every_support_gate():
 
 
 def test_prune_checkpoint_updates_gaussians_and_optimizer_state():
+    torch = pytest.importorskip("torch")
     checkpoint = {
         "pipeline": {
             "_model.gauss_params.means": torch.arange(12).reshape(4, 3),

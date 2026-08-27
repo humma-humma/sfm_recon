@@ -11,6 +11,8 @@ training frames, and intermediate edits remain local and are excluded by
 | `slam_reconstruction_outside_timeline.mp4` | Exact exterior orbit across every method plus cleaned-splat showcase | 72 s |
 
 Each MP4 has a matching `*_contact_sheet.png` used as the GitHub preview.
+`github_social_preview.jpg` is the upload-ready 1280×640 repository social
+image; the lossless PNG source is retained alongside it.
 
 ## Presentation semantics
 

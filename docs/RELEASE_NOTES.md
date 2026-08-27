@@ -1,5 +1,11 @@
 # Portfolio release notes
 
+## v1.0.1
+
+- Skip the optional PyTorch checkpoint-pruning test when PyTorch is not
+  installed, allowing the lightweight CI matrix to test the remaining suite.
+- Add an upload-ready 1280×640 JPEG social preview below GitHub's 1 MB limit.
+
 ## v1.0-portfolio
 
 This release packages the complete reconstruction project as a public-facing
