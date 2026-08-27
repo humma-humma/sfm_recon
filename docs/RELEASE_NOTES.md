@@ -4,6 +4,7 @@
 
 - Skip the optional PyTorch checkpoint-pruning test when PyTorch is not
   installed, allowing the lightweight CI matrix to test the remaining suite.
+- Constrain OpenCV to the validated 4.x API used by AKAZE feature extraction.
 - Add an upload-ready 1280×640 JPEG social preview below GitHub's 1 MB limit.
 
 ## v1.0-portfolio
