@@ -40,9 +40,13 @@ bitwise equality across hardware, BLAS versions or GPU kernels.
 
 - Full local suite: **212 passed**, including the installed C++ and Ceres
   components and the two new relocated-input CLI tests.
-- Earlier clean source validation: CPU tests and source/pure-wheel builds passed;
-  all six hosted native Ceres wheel jobs passed across Linux, Windows and macOS
-  with Python 3.10/3.11. New constrained CI is the acceptance gate for this change.
+- [Clean constrained CI](https://github.com/humma-humma/sfm_recon/actions/runs/39049429141)
+  passed on Python 3.10 and 3.11: **167 passed, 24 optional tests skipped** per
+  environment. Source/pure-wheel builds and CLI import checks passed too.
+- [Native wheel CI](https://github.com/humma-humma/sfm_recon/actions/runs/39049429129)
+  built, repaired and tested **all six Ceres wheels** across Linux, Windows and
+  macOS with Python 3.10/3.11 for the updated source. Optional skips in CPU CI do
+  not replace this separate native matrix.
 - Fresh milk run: selected native preset, new matching/output directory, seed 0;
   **50 cameras, 1,745 points**. Matching files were byte-identical to the archived
   cache (tree SHA-256 `a80cb18d7ec7b7163628a9c5ef28fa99eadd1ca00c83ac141f3123d772dddf61`).
