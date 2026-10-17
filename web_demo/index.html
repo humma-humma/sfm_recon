@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reconstruction Atlas — interactive demo</title><link rel="stylesheet" href="demo.css"></head>
+<body>
+<header><a class="brand" href="./">Reconstruction Atlas</a><a href="portfolio.html">Full video portfolio ↗</a></header>
+<main>
+  <div class="intro"><div><span class="eyebrow">Incremental SfM · neural view synthesis · Gaussian splatting</span><h1>Explore objects and spaces.</h1></div><p>Navigate the full captured routes for three objects and a building.</p></div>
+  <nav id="datasets" aria-label="Choose reconstruction">
+    <button data-dataset="box"><img src="assets/portfolio/box.jpg" alt=""><span>Box<small>Tabletop object</small></span></button>
+    <button data-dataset="milk"><img src="assets/portfolio/milk.jpg" alt=""><span>Milk<small>Tabletop object</small></span></button>
+    <button data-dataset="boot"><img src="assets/portfolio/shoe.jpg" alt=""><span>Shoe<small>Tabletop object</small></span></button>
+    <button data-dataset="scene"><img src="assets/portfolio/scene_motion.jpg" alt=""><span>Scene<small>Building traversal</small></span></button>
+  </nav>
+  <div class="toolbar"><span class="eyebrow">Interactive route navigation</span><label id="renderer-label" for="renderer">Scene render <select id="renderer"><option value="motion">Motion-compensated GNT · default</option><option value="fallback">Improved splats + reliability fallback</option></select></label></div>
+  <section id="viewport" tabindex="0" aria-label="Route navigation. W/S or up/down arrows move along the rendered route; Space plays or pauses.">
+    <video id="route" muted playsinline preload="metadata" aria-label="Reconstruction route"></video>
+    <div id="badge">GNT + motion compensation · 30fps</div>
+    <div id="loading" role="status">Loading scene…</div>
+  </section>
+  <div id="route-controls"><button id="play">Play route</button><button id="reset">Start</button><label for="seek">Route position <input id="seek" type="range" min="0" max="146.5" step="0.033333333" value="0"></label><output id="time">0.00 / 146.53 s</output><label for="speed">Speed <select id="speed"><option value="1">1×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option></select></label><button id="fullscreen">Fullscreen</button></div>
+  <div class="explanation"><div><h2 id="title">Scene</h2><p id="description"></p></div><p id="controls-hint"></p></div>
+  <p class="scope" id="scope">Route navigation follows pre-rendered camera positions.</p>
+  <footer><a href="portfolio.html">Five-video portfolio</a><a href="gnt-scene-15fps-splats.html">Scene comparison & render times</a></footer>
+</main><script type="module" src="demo.js"></script>
+</body></html>

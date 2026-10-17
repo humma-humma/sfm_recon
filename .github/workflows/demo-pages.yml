@@ -1,0 +1,64 @@
+name: Deploy interactive demo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web_demo/**'
+      - 'scripts/build_demo_site.py'
+      - 'scripts/verify_demo_site.py'
+      - '.github/workflows/demo-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download versioned render assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          manifest = json.loads(Path('web_demo/media-manifest.json').read_text())
+          command = ['gh', 'release', 'download', manifest['release_tag'],
+                     '--repo', manifest['repository'], '--dir', 'dist/media']
+          for video in manifest['videos']:
+              command.extend(['--pattern', video['release_asset']])
+          subprocess.run(command, check=True)
+          PY
+      - name: Build and verify portable site
+        run: |
+          python scripts/build_demo_site.py --assets-dir dist/media
+          python scripts/verify_demo_site.py dist/demo
+          node --check dist/demo/demo.js
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist/demo
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,4 +1,10 @@
 __pycache__/
+web_demo/assets/*
+!web_demo/assets/portfolio/
+web_demo/assets/portfolio/*
+!web_demo/assets/portfolio/*.jpg
+web_demo/node_modules/
+.cache/npm/
 .pytest_cache/
 *.pyc
 *.pyc.*
@@ -20,6 +26,15 @@ data/
 *.ckpt
 *.pth
 *.pt
+*.pyd
+src/sfm_reconstruction/_third_party_licenses/
+*.so
+
+# Detailed local retrospective and its evidence bundle are not public artifacts.
+docs/PROJECT_FULL_WRITEUP.md
+docs/PROJECT_EVIDENCE_APPENDIX.md
+docs/PROJECT_EVIDENCE_MANIFEST.json
+docs/PROJECT_CLEANUP.md
 
 # Keep local editing footage out of Git. Only the curated portfolio exports
 # below are published with the repository.

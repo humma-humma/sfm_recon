@@ -15,6 +15,21 @@ The project emphasizes the complete engineering path: correspondence filtering,
 track construction, camera registration, triangulation, nonlinear optimization,
 diagnostics, failure analysis, and presentation-quality rendering.
 
+## Interactive demo
+
+**[Explore Reconstruction Atlas](https://humma-humma.github.io/sfm_recon/)** - box,
+milk, shoe and a full building traversal, with route navigation, timeline seeking,
+playback controls and mobile layout. The scene defaults to motion-compensated GNT;
+an improved-splat renderer with reliability fallback is available at the same time.
+
+[View all five videos](https://humma-humma.github.io/sfm_recon/portfolio.html) |
+[Compare scene renderers and timings](https://humma-humma.github.io/sfm_recon/gnt-scene-15fps-splats.html) |
+[Build/deployment guide](web_demo/README.md)
+
+Navigation follows rendered camera routes. The GitHub Actions workflow packages
+verified release videos and deploys GitHub Pages; viewing requires no GPU or Docker.
+The detailed local retrospective and evidence bundle are excluded from publication.
+
 ## Portfolio
 
 | Object reconstruction: milkbox and boot | Full-sequence SLAM: inside view |
