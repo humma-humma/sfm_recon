@@ -2,9 +2,10 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reconstruction Atlas — interactive demo</title><link rel="stylesheet" href="demo.css"></head>
 <body>
-<header><a class="brand" href="./">Reconstruction Atlas</a><a href="portfolio.html">Full video portfolio ↗</a></header>
+<header><a class="brand" href="./">Reconstruction Atlas</a></header>
 <main>
-  <div class="intro"><div><span class="eyebrow">Incremental SfM · neural view synthesis · Gaussian splatting</span><h1>Explore objects and spaces.</h1></div><p>Navigate the full captured routes for three objects and a building.</p></div>
+  <section class="project-intro" aria-labelledby="project-heading"><h1 id="project-heading">From photographs to navigable 3D.</h1><p>This project reconstructs tabletop objects and a building from photographs and RGB-D video. It combines classical structure from motion, bundle adjustment and RGB-D SLAM with learned loop closure, alongside neural view synthesis and Gaussian splatting to turn captured camera routes into interactive visual tours.</p></section>
+  <div class="intro"><div><span class="eyebrow">Incremental SfM · neural view synthesis · Gaussian splatting</span><h2>Explore objects and spaces.</h2></div><p>Navigate the full captured routes for three objects and a building.</p></div>
   <nav id="datasets" aria-label="Choose reconstruction">
     <button data-dataset="box"><img src="assets/portfolio/box.jpg" alt=""><span>Box<small>Tabletop object</small></span></button>
     <button data-dataset="milk"><img src="assets/portfolio/milk.jpg" alt=""><span>Milk<small>Tabletop object</small></span></button>
@@ -20,6 +21,37 @@
   <div id="route-controls"><button id="play">Play route</button><button id="reset">Start</button><label for="seek">Route position <input id="seek" type="range" min="0" max="146.5" step="0.033333333" value="0"></label><output id="time">0.00 / 146.53 s</output><label for="speed">Speed <select id="speed"><option value="1">1×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option></select></label><button id="fullscreen">Fullscreen</button></div>
   <div class="explanation"><div><h2 id="title">Scene</h2><p id="description"></p></div><p id="controls-hint"></p></div>
   <p class="scope" id="scope">Route navigation follows pre-rendered camera positions.</p>
-  <footer><a href="portfolio.html">Five-video portfolio</a><a href="gnt-scene-15fps-splats.html">Scene comparison & render times</a></footer>
+  <section class="measurements" aria-labelledby="results-heading">
+    <span class="eyebrow">Measured results</span><h2 id="results-heading">Runtime and reconstruction quality</h2>
+    <p class="table-note">Recorded on the project workstation with an RTX 2080, at 960 &times; 540. Rendering and processing times below exclude model training. Output fps describes video playback, not rendering speed.</p>
+    <p class="table-swipe">Swipe tables sideways to see every column.</p>
+    <h3 id="runtime-heading">Full-scene runtime</h3>
+    <p class="table-note">The scene route is 146.53 seconds long. All scene variants share 2,198 genuine GNT views: 2,089 newly rendered and 109 reused.</p>
+    <div class="table-scroll" role="region" aria-labelledby="runtime-heading" tabindex="0"><table id="runtime-table"><thead><tr><th scope="col">Stage</th><th scope="col">Recorded time</th><th scope="col">What the measurement includes</th></tr></thead><tbody>
+      <tr><th scope="row">Shared GNT rendering</th><td>37 h 10 min 42 s</td><td>Renderer calls for the 2,089 new views</td></tr>
+      <tr><th scope="row">Native GNT video ready</th><td>37 h 17 min 49 s</td><td>Original job start to 15 fps MP4 ready</td></tr>
+      <tr><th scope="row">Motion-compensated video ready</th><td>37 h 26 min 2 s</td><td>Original job start to 30 fps MP4 ready</td></tr>
+      <tr><th scope="row">Additional splat rendering</th><td>2 min 29 s</td><td>4,396 native splat renderer calls</td></tr>
+      <tr><th scope="row">Splat setup, rendering and export</th><td>8 min 13 s</td><td>Wall time; includes the renderer calls above</td></tr>
+      <tr><th scope="row">Splat correction and video encoding</th><td>11 min 31 s</td><td>Both corrected variants encoded together</td></tr>
+      <tr><th scope="row">Full video verification</th><td>2 min 5 s</td><td>Frame decoding and fidelity checks</td></tr>
+    </tbody></table></div>
+    <p class="table-note">Splat generation and correction add 19 min 44 s before verification, on top of the shared GNT work. Reliability fallback also uses the existing motion-compensated output. These are overlapping stages and job milestones, so the rows must not be added together. Earlier cached-view rendering is excluded; isolated original encoder times were not recorded.</p>
+    <h3 id="scene-quality-heading">Scene: quality between GNT anchors</h3>
+    <div class="table-scroll" role="region" aria-labelledby="scene-quality-heading" tabindex="0"><table id="scene-quality-table"><thead><tr><th scope="col">Method</th><th scope="col">Output fps</th><th scope="col">PSNR (dB) &uarr;</th><th scope="col">SSIM &uarr;</th></tr></thead><tbody>
+      <tr class="preferred"><th scope="row">GNT + motion compensation <span class="table-tag">Default</span></th><td>30</td><td>35.13</td><td>0.9321</td></tr>
+      <tr><th scope="row">GNT + corrected intermediate splats</th><td>30</td><td>32.81</td><td>0.9154</td></tr>
+      <tr><th scope="row">GNT + corrected splats + reliability fallback</th><td>30</td><td>34.21</td><td>0.9291</td></tr>
+    </tbody></table></div>
+    <p class="table-note">Same 89 intermediate frames from the previously rendered six-second outdoor segment, compared with independent 30-view/s GNT renders. These measure agreement with GNT, not ground-truth photographs. No independent 30-view/s reference exists for the full route; these scores do not establish indoor or full-scene quality.</p>
+    <h3 id="object-quality-heading">Objects: held-out photograph quality</h3>
+    <div class="table-scroll" role="region" aria-labelledby="object-quality-heading" tabindex="0"><table id="object-quality-table"><thead><tr><th scope="col">Final balanced splat model</th><th scope="col">Test photos</th><th scope="col">PSNR (dB) &uarr;</th><th scope="col">SSIM &uarr;</th></tr></thead><tbody>
+      <tr><th scope="row">Box</th><td>6</td><td>21.24</td><td>0.8188</td></tr>
+      <tr><th scope="row">Milk</th><td>7</td><td>19.00</td><td>0.7386</td></tr>
+      <tr><th scope="row">Shoe</th><td>7</td><td>19.10</td><td>0.7376</td></tr>
+    </tbody></table></div>
+    <p class="table-note">Original photos were reserved for evaluation of these final splat fits; camera geometry and poses predate the split. These small, different test sets describe each object and are not a controlled ranking of methods. Object quality uses a different reference from the scene table.</p>
+    <p class="metric-key"><strong>Reading the metrics:</strong> PSNR measures pixel fidelity in decibels; SSIM measures structural similarity. Higher is better for both, but neither fully captures perceived detail or temporal smoothness. PSNR, SSIM and LPIPS are <a href="https://openaccess.thecvf.com/content/CVPR2024/papers/Liang_GS-IR_3D_Gaussian_Splatting_for_Inverse_Rendering_CVPR_2024_paper.pdf" target="_blank" rel="noopener">standard novel-view synthesis metrics</a>; LPIPS was not measured for these final comparisons and is omitted. <a href="public_data/homepage-results.json">Measurement data</a></p>
+  </section>
 </main><script type="module" src="demo.js"></script>
 </body></html>

@@ -1,0 +1,64 @@
+{
+  "scene": {
+    "timings": {
+      "gnt_recorded_render_seconds": 133841.64241025114,
+      "gnt_new_views": 2089,
+      "gnt_reused_views": 109,
+      "splat_render_seconds": 148.90352766180877,
+      "splat_wall_seconds": 493.37002922105603,
+      "correction_two_encodes_seconds": 690.9309954997152,
+      "correction_loop_including_pipe_writes_seconds": 688.2212080974132,
+      "verification_seconds": 125.17648439994082,
+      "original_native_ready_wall_seconds": 134269.37163376808,
+      "original_motion_ready_wall_seconds": 134761.8283867836,
+      "original_job_start_utc": "2026-10-14T14:01:01.5436534Z"
+    },
+    "outdoor_gap_scores": {
+      "motion": {
+        "count": 89,
+        "gap_psnr": 35.129985840575074,
+        "gap_ssim": 0.9321062010427239
+      },
+      "detail": {
+        "count": 89,
+        "gap_psnr": 32.81184631625901,
+        "gap_ssim": 0.9153927492850792
+      },
+      "fallback": {
+        "count": 89,
+        "gap_psnr": 34.211969515046626,
+        "gap_ssim": 0.9290750182993248
+      }
+    },
+    "scope": "89 intermediate frames from a six-second outdoor clip, compared with independently rendered GNT; not full-route photographic ground truth."
+  },
+  "objects": {
+    "box": {
+      "checkpoint_sha256": "48881a6365cf2e2dd520a7939bb279e449fa179baf4f775d8c98308868f6c87f",
+      "heldout_photos": {
+        "count": 6,
+        "psnr": 21.24351180153003,
+        "ssim": 0.8188165675371543
+      },
+      "scope": "Original photos are evaluation-only; camera geometry and poses predate the split."
+    },
+    "milk": {
+      "checkpoint_sha256": "6d586fe6cab63081578f374b05cbdd82010e71d6e2f7db74f45e9b9ef9a37700",
+      "heldout_photos": {
+        "count": 7,
+        "psnr": 18.99716683668169,
+        "ssim": 0.7385856058917464
+      },
+      "scope": "Original photos are evaluation-only; camera geometry and poses predate the split."
+    },
+    "boot": {
+      "checkpoint_sha256": "737f4fa68dce8b6e178470d173ce904df49d8362fd46a8bd98d44587a12affbe",
+      "heldout_photos": {
+        "count": 7,
+        "psnr": 19.095199347919525,
+        "ssim": 0.7376467220492623
+      },
+      "scope": "Original photos are evaluation-only; camera geometry and poses predate the split."
+    }
+  }
+}

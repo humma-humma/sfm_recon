@@ -50,6 +50,9 @@ def build(output, assets_dir=None):
     reports = output / 'assets/gnt_finalization/scene15_splat'
     for name in ('results.json', 'comparison_progress.json'):
         shutil.copyfile(WEB / 'public_data' / name, reports / name)
+    (output / 'public_data').mkdir()
+    shutil.copyfile(WEB / 'public_data/homepage-results.json',
+                    output / 'public_data/homepage-results.json')
     shutil.copyfile(WEB / 'media-manifest.json', output / 'media-manifest.json')
     print(f'Packaged {len(manifest["videos"])} verified videos ({total / 1e6:.1f} MB) into {output}')
 

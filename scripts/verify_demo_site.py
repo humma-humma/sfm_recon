@@ -48,8 +48,20 @@ def verify(root):
     data = root / 'assets/gnt_finalization/scene15_splat'
     assert json.loads((data / 'comparison_progress.json').read_text())['status'] == 'complete'
     assert json.loads((data / 'results.json').read_text())['anchor_count'] == 2198
+    home = (root / 'index.html').read_text(encoding='utf-8')
+    assert 'Full video portfolio' not in home and '<footer>' not in home
+    assert home.index('id="project-heading"') < home.index('id="datasets"') < home.index('id="runtime-table"')
+    measurements = json.loads((root / 'public_data/homepage-results.json').read_text())
+    scene_table = home.split('id="scene-quality-table"')[1].split('</table>')[0]
+    for scores in measurements['scene']['outdoor_gap_scores'].values():
+        assert scores['count'] == 89
+        assert f'{scores["gap_psnr"]:.2f}' in scene_table and f'{scores["gap_ssim"]:.4f}' in scene_table
+    object_table = home.split('id="object-quality-table"')[1].split('</table>')[0]
+    for item in measurements['objects'].values():
+        scores = item['heldout_photos']
+        assert f'{scores["psnr"]:.2f}' in object_table and f'{scores["ssim"]:.4f}' in object_table
     assert not any(root.rglob('PROJECT_FULL_WRITEUP*')), 'Local report must not be published'
-    print('Passed: portable links, video hashes, comparison data, no junctions or local report')
+    print('Passed: portable links, video hashes, homepage metrics and layout, no junctions or local report')
 
 
 if __name__ == '__main__':
