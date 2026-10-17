@@ -122,6 +122,8 @@ class PoseGraphConfig:
     optimizer_loss: str = "soft_l1"
     optimizer_f_scale: float = 1.0
     optimizer_max_nfev: int = 200
+    optimizer_backend: str = "python"
+    python_rotation_log: str = "opencv"  # "stable" uses SciPy's smooth SO(3) log.
 
 
 @dataclass(frozen=True)
@@ -202,8 +204,14 @@ def _matrix_from_vec6(vec: np.ndarray) -> np.ndarray:
     return transform
 
 
-def _vec6_from_matrix(transform: np.ndarray) -> np.ndarray:
-    rotation_vector, _ = cv2.Rodrigues(np.asarray(transform[:3, :3], dtype=np.float64))
+def _vec6_from_matrix(transform: np.ndarray, *, rotation_log: str = "opencv") -> np.ndarray:
+    if rotation_log == "stable":
+        from scipy.spatial.transform import Rotation
+        rotation_vector = Rotation.from_matrix(transform[:3, :3]).as_rotvec()
+    elif rotation_log == "opencv":
+        rotation_vector, _ = cv2.Rodrigues(np.asarray(transform[:3, :3], dtype=np.float64))
+    else:
+        raise ValueError("rotation_log must be opencv or stable")
     return np.concatenate(
         [rotation_vector.ravel(), np.asarray(transform[:3, 3], dtype=np.float64)]
     )
@@ -838,6 +846,11 @@ def optimize_pose_graph(
 
     if config is None:
         config = PoseGraphConfig()
+    from .native_backend import validate_backend
+
+    validate_backend(config.optimizer_backend)
+    if config.python_rotation_log not in {"opencv", "stable"}:
+        raise ValueError("python_rotation_log must be opencv or stable")
     if len(graph.nodes) < 2:
         raise ValueError("At least two nodes are required for optimization")
     if not graph.edges:
@@ -852,7 +865,9 @@ def optimize_pose_graph(
     offset_of = {index: position * 6 for position, index in enumerate(variable_indices)}
 
     initial = np.concatenate(
-        [_vec6_from_matrix(node_by_index[index].camera_to_world) for index in variable_indices]
+        [_vec6_from_matrix(node_by_index[index].camera_to_world,
+            rotation_log="stable" if config.optimizer_backend == "cpp" else config.python_rotation_log)
+         for index in variable_indices]
     ) if variable_indices else np.zeros(0)
 
     edges = graph.edges
@@ -872,7 +887,10 @@ def optimize_pose_graph(
             pose_q = current[edge.target_index]
             predicted = np.linalg.inv(pose_q) @ pose_p
             error = np.linalg.inv(edge.measured_target_from_source) @ predicted
-            error_vec = _vec6_from_matrix(error)
+            if config.python_rotation_log == "stable":
+                error_vec = _vec6_from_matrix(error, rotation_log="stable")
+            else:
+                error_vec = _vec6_from_matrix(error)
             base = 6 * row
             out[base : base + 3] = edge.rotation_weight * error_vec[:3]
             out[base + 3 : base + 6] = edge.translation_weight * error_vec[3:6]
@@ -901,11 +919,17 @@ def optimize_pose_graph(
             message="no free poses",
         )
 
+    solver_kwargs = {"jac_sparsity": sparsity}
+    if config.optimizer_backend == "cpp":
+        from .native_backend import pose_graph_callbacks
+
+        residuals, jacobian = pose_graph_callbacks(graph, offset_of, len(initial))
+        solver_kwargs = {"jac": jacobian}
     initial_residuals = residuals(initial)
     result = least_squares(
         residuals,
         initial,
-        jac_sparsity=sparsity,
+        **solver_kwargs,
         method="trf",
         loss=config.optimizer_loss,
         f_scale=config.optimizer_f_scale,
@@ -1175,6 +1199,8 @@ def add_pose_graph_arguments(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--optimizer-loss", default="soft_l1")
     group.add_argument("--optimizer-f-scale", type=float, default=1.0)
     group.add_argument("--optimizer-max-nfev", type=int, default=200)
+    group.add_argument("--optimizer-backend", choices=("python", "cpp"), default="python")
+    group.add_argument("--python-rotation-log", choices=("opencv", "stable"), default="opencv")
 
 
 @dataclass(frozen=True)
@@ -1300,4 +1326,6 @@ def pose_graph_config_from_args(args: argparse.Namespace) -> PoseGraphConfig:
         optimizer_loss=args.optimizer_loss,
         optimizer_f_scale=args.optimizer_f_scale,
         optimizer_max_nfev=args.optimizer_max_nfev,
+        optimizer_backend=args.optimizer_backend,
+        python_rotation_log=args.python_rotation_log,
     )

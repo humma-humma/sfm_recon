@@ -1,0 +1,58 @@
+{
+  "name": "stage2_milk_coverage",
+  "dataset": "../Experiments/Stage_2_Data/stage2/milk",
+  "correspondences": "outputs/stage2_milk_masked_track3_ba/matching_cache/correspondences",
+  "reconstruction": {
+    "track_tolerance": 0.001,
+    "min_track_observations": 2,
+    "essential_threshold": 1.0,
+    "pnp_reprojection_error": 4.0,
+    "max_reprojection_error": 5.0,
+    "min_triangulation_angle": 1.0,
+    "min_pnp_points": 12,
+    "min_pnp_inliers": 10,
+    "bundle_adjustment": true,
+    "bundle_adjustment_max_nfev": 40,
+    "max_point_distance_factor": 1.5,
+    "two_view_max_reprojection_error": null,
+    "two_view_min_triangulation_angle": null,
+    "initial_pose_correspondence_dir": null,
+    "bundle_adjustment_backend": "ceres",
+    "geometry_backend": "cpp",
+    "ceres_max_iterations": 100,
+    "ceres_num_threads": 1,
+    "ceres_linear_solver": "dense_schur",
+    "bundle_adjustment_loss_scale": 2.0,
+    "bundle_adjustment_max_reprojection_error": 3.0
+  },
+  "reference_case": "min_track_observations_2",
+  "expected_metrics": {
+    "cameras": 50,
+    "points": 4018,
+    "pose_metrics": {
+      "cameras": 50,
+      "scale": 6.5833731608322665,
+      "mean_rotation_radians": 0.1170267288933325,
+      "mean_rotation_degrees": 6.705137655809639,
+      "median_rotation_degrees": 5.193257619224759,
+      "mean_translation": 0.0618586160732258,
+      "median_translation": 0.04915330732676496
+    },
+    "reprojection_rmse_px": 3.6013668647348958,
+    "image_coverage": 0.2459375,
+    "mesh_proxy": {
+      "input_points": 4018,
+      "cropped_points": 3963,
+      "mean_nearest_vertex_distance": 0.021989582092847088,
+      "median_nearest_vertex_distance": 0.015623365418555267,
+      "p90_nearest_vertex_distance": 0.025350368366608107,
+      "fraction_within_005": 0.9848183175709309,
+      "cropped_mean_nearest_vertex_distance": 0.015326278031147474,
+      "cropped_median_nearest_vertex_distance": 0.015519168403362468,
+      "cropped_p90_nearest_vertex_distance": 0.025065737703951842,
+      "cropped_fraction_within_005": 0.9984859954579863
+    },
+    "mesh_coverage": 0.756253878813551
+  },
+  "note": "Dataset-specific exploratory tuning. Paths are relative to the repository root. Cached correspondence family is part of the recipe. Boot metrics measure consistency only; no full GT. Defaults are unchanged."
+}

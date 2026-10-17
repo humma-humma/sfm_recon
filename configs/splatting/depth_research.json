@@ -1,0 +1,18 @@
+{
+  "method": "confidence-weighted measured-depth Splatfacto continuation",
+  "source_steps": 5000,
+  "additional_steps": 5000,
+  "relative_huber_beta": 0.1,
+  "depth_loss_weight": 0.1,
+  "confidence_min_agreeing_training_neighbors": 2,
+  "agreement_absolute_m": 0.05,
+  "agreement_relative": 0.03,
+  "valid_depth_m": [0.1, 8.0],
+  "rgb_gate": "existing compare_candidate gates on all 35 held-out views versus matched 10k RGB control",
+  "geometry_gate": {
+    "six_view_median_depth_error_ratio_max": 0.8,
+    "pavement_depth_error_increase_m_max": 0.03
+  },
+  "selection": "retain selected presentation until numeric gates and visual review justify replacement",
+  "claim": "adaptation of uncertainty-aware depth-prior ideas, not a paper reproduction"
+}

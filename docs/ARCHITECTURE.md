@@ -84,6 +84,27 @@ SfM/SLAM cameras + RGB images + point seeds
 
 ## Extension points
 
-The most valuable future engineering extension is an optional C++ backend for
-geometry and optimization. The Python implementation and deterministic tests
-already provide a numerical reference for Eigen/Ceres/pybind11 integration.
+An optional C++17/pybind11 backend provides geometry kernels and analytic
+Jacobians for bundle adjustment and pose graphs. These kernels retain SciPy;
+a separate optional Ceres 2.2 backend solves bundle adjustment with a Schur
+solver. Python remains the default reference. See [C++ integration](CPP_INTEGRATION.md)
+for building, backend selection, and numerical/runtime comparisons.
+
+All optional backends use the Python implementation and deterministic tests
+as their numerical reference.
+
+## Measured-depth research path
+
+`prepare_depth_research.py` excludes the held-out cameras, estimates heuristic
+depth confidence from nearby training RGB-D agreement, and fuses a TSDF baseline.
+`train_depth_research.py` resumes the unchanged fresh 5k splat with a robust
+confidence-weighted relative depth loss for 5k further steps. RGB-only continuation
+is the matched control. The experiment patch is process-local; installed
+Nerfstudio and selected checkpoints are unchanged. The candidate stores final
+inference weights without Adam state to bound disk use.
+
+`evaluate_splat_checkpoint.py` evaluates every held-out RGB frame and optionally
+compares aligned sensor depth. `report_depth_research.py` applies existing RGB
+regression gates and predeclared geometric checks and builds the local web report.
+See [results and reproduction](DEPTH_RESEARCH_RESULTS.md). This is an adaptation
+of depth-prior ideas, not a reproduction of Dense Depth Priors or BundleFusion.

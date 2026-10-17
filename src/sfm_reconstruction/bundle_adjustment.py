@@ -16,7 +16,22 @@ def bundle_adjust(
     fixed_camera_ids: set[int],
     max_nfev: int = 40,
     max_reprojection_error: float = 5.0,
+    backend: str = "python",
+    ceres_max_iterations: int = 100,
+    solver_report: dict | None = None,
+    loss_scale: float = 2.0,
+    ceres_num_threads: int = 1,
+    ceres_linear_solver: str = "dense_schur",
 ) -> tuple[dict[int, Pose], dict[int, np.ndarray]]:
+    from .native_backend import validate_backend
+
+    validate_backend(backend, allow_ceres=True)
+    if ceres_num_threads < 1 or not isinstance(ceres_num_threads, int):
+        raise ValueError("ceres_num_threads must be a positive integer")
+    if ceres_linear_solver not in {"dense_schur", "sparse_schur", "iterative_schur"}:
+        raise ValueError("Unknown Ceres linear solver")
+    if not np.isfinite(loss_scale) or loss_scale <= 0:
+        raise ValueError("loss_scale must be finite and positive")
     variable_camera_ids = sorted(set(poses) - fixed_camera_ids)
     camera_offsets = {
         camera_id: index * 6 for index, camera_id in enumerate(variable_camera_ids)
@@ -99,18 +114,42 @@ def bundle_adjust(
             errors[index] = projected - observed
         return errors.ravel()
 
+    if backend == "ceres":
+        from .native_backend import ceres_bundle_adjust
+
+        values, report = ceres_bundle_adjust(
+            intrinsics, observations, poses, points, camera_offsets,
+            point_offsets, initial, ceres_max_iterations, loss_scale,
+            ceres_num_threads, ceres_linear_solver,
+        )
+        if solver_report is not None:
+            solver_report.update(report)
+        optimized_poses, optimized_points = unpack(values)
+        return optimized_poses, {**points, **optimized_points}
+
+    solver_kwargs = {"jac_sparsity": sparsity}
+    if backend == "cpp":
+        from .native_backend import bundle_adjustment_callbacks
+
+        residuals, jacobian = bundle_adjustment_callbacks(
+            intrinsics, observations, poses, camera_offsets, point_offsets, len(initial)
+        )
+        solver_kwargs = {"jac": jacobian}
     result = least_squares(
         residuals,
         initial,
-        jac_sparsity=sparsity,
+        **solver_kwargs,
         method="trf",
         loss="soft_l1",
-        f_scale=2.0,
+        f_scale=loss_scale,
         x_scale="jac",
         max_nfev=max_nfev,
         verbose=0,
     )
     optimized_poses, optimized_points = unpack(result.x)
+    if solver_report is not None:
+        solver_report.update(final_cost=float(result.cost), nfev=result.nfev,
+                             converged=bool(result.success), message=result.message)
     merged_points = dict(points)
     merged_points.update(optimized_points)
     return optimized_poses, merged_points

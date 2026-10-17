@@ -1,0 +1,102 @@
+{
+  "name": "stage3_scene_python_legacy",
+  "dataset": "../Experiments/Stage_3_Data/stage3",
+  "odometry": {
+    "motion_model": "lk_pnp",
+    "feature_mode": "akaze",
+    "max_features": 2500,
+    "image_scale": 0.5,
+    "ratio_threshold": 0.8,
+    "depth_scale": 1000.0,
+    "min_depth": 0.1,
+    "max_depth": 8.0,
+    "min_matches": 30,
+    "min_pnp_points": 12,
+    "min_pnp_inliers": 10,
+    "pnp_reprojection_error": 2.0,
+    "ransac_iterations": 200,
+    "ransac_3d_threshold": 0.05,
+    "lk_quality_level": 0.005,
+    "lk_min_distance": 4.0,
+    "max_translation_step": 0.2,
+    "max_rotation_step_degrees": 20.0
+  },
+  "pose_graph": {
+    "loop_method": "pnp",
+    "loop_source_window": 40,
+    "loop_target_window": 40,
+    "loop_source_stride": 8,
+    "loop_target_stride": 8,
+    "loop_min_separation": 50,
+    "max_loop_edges": 1,
+    "loop_endpoint_spacing": 0,
+    "loop_candidate_mode": "window",
+    "retrieval_stride": 16,
+    "retrieval_min_separation": 500,
+    "retrieval_max_candidates": 50,
+    "retrieval_proposal_spacing": 16,
+    "retrieval_refine_radius": 4,
+    "retrieval_refine_top_k": 10,
+    "retrieval_min_similarity": 0.6,
+    "retrieval_batch_size": 16,
+    "retrieval_device": "auto",
+    "loop_matcher": "classical",
+    "learned_device": "auto",
+    "learned_filter_threshold": 0.1,
+    "loop_min_matches": 30,
+    "loop_min_depth_points": 12,
+    "loop_min_inliers": 15,
+    "loop_max_translation": 3.0,
+    "loop_max_rotation_degrees": 60.0,
+    "loop_max_reprojection_error": 4.0,
+    "odometry_translation_weight": 1.0,
+    "odometry_rotation_weight": 1.0,
+    "loop_translation_weight": 0.5,
+    "loop_rotation_weight": 0.5,
+    "keyframe_stride": 8,
+    "optimizer_loss": "soft_l1",
+    "optimizer_f_scale": 0.1,
+    "optimizer_max_nfev": 50,
+    "optimizer_backend": "python",
+    "python_rotation_log": "opencv"
+  },
+  "verified_loop": {
+    "source_index": 4387,
+    "target_index": 32,
+    "source_from_target": [
+      [
+        0.9978442754278208,
+        -0.06554734653344212,
+        -0.0032167310040148575,
+        0.09931751823896823
+      ],
+      [
+        0.06521044140814751,
+        0.9958392663844037,
+        -0.06365338842769694,
+        0.03550667189136508
+      ],
+      [
+        0.007375657752492157,
+        0.06330640480549779,
+        0.9979668826084964,
+        -0.035949102110347325
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "method": "pnp",
+    "inliers": 456,
+    "median_reprojection_error": 0.499778414
+  },
+  "expected_metrics": {
+    "poses": 4396,
+    "tracked_transitions": 4387,
+    "official_ate": 1.609394
+  },
+  "note": "Dataset-specific joint frontend/graph recipe. Python OpenCV log is explicit to preserve measured behavior. Reuses the image-verified loop for these exact frame indices; not a generic loop-discovery preset or held-out validation."
+}

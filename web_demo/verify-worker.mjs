@@ -1,0 +1,12 @@
+import vm from 'node:vm';
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+let result;
+const context=vm.createContext({Float32Array,Uint32Array,postMessage:data=>result=data});
+vm.runInContext(fs.readFileSync(new URL('./sort-worker.js',import.meta.url),'utf8'),context);
+context.onmessage({data:{centers:new Float32Array([0,0,1, 0,0,3, 0,0,-1]).buffer}});
+context.onmessage({data:{position:[0,0,0],forward:[0,0,1],sequence:7}});
+assert.deepEqual(Array.from(result.order),[1,0,2]);assert.equal(result.sequence,7);
+context.onmessage({data:{position:[0,0,0],forward:[0,0,-1],sequence:8}});
+assert.deepEqual(Array.from(result.order),[2,0,1]);
+console.log('PASS: worker orders splats back-to-front in both directions.');

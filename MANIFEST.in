@@ -1,0 +1,38 @@
+include native/CMakeLists.txt
+include build_backend.py
+include setup.py
+include scripts/benchmark_ceres_options.py
+include scripts/diagnose_native_graph.py
+include scripts/collect_native_licenses.py
+include scripts/save_selected_presets.py
+include scripts/run_preset.py
+include scripts/report_cpp_followup.py
+include scripts/benchmark_splat_native.py
+include scripts/profile_splat_cuda.py
+include scripts/prepare_splat_refresh.py
+include scripts/train_splat_refresh.py
+include scripts/evaluate_splat_checkpoint.py
+include scripts/finish_splat_refresh.py
+include scripts/finish_splat_refresh.ps1
+include scripts/finalize_splat_refresh.py
+include docs/SPLAT_REFRESH.md
+include docs/SPLAT_REFRESH_RESULTS.md
+include docs/SPLATTING_CPP_RESULTS.md
+include docs/CPP_FOLLOWUP.md
+recursive-include src/sfm_reconstruction/_third_party_licenses *
+recursive-include configs/presets *.json
+recursive-include configs/splatting *.json
+include native/kernels.cpp
+include native/ceres_bundle.cpp
+include scripts/build_native.ps1
+include scripts/benchmark_native.py
+include scripts/tune_ceres.py
+include scripts/tune_milk_geometry.py
+include scripts/sweep_reconstruction.py
+include scripts/sweep_scene.py
+include scripts/sweep_scene_frontend.py
+include scripts/report_hyperparameter_check.py
+include docs/HYPERPARAMETER_CHECK.md
+include docs/CPP_INTEGRATION.md
+include docs/CPP_RESULTS.md
+include docs/CERES_RESULTS.md

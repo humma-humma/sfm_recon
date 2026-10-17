@@ -11,6 +11,7 @@ from .stage3_gaussian_seed_rebalance import (
     _even_sample,
     _load_ascii_ply,
     _visible_mask,
+    focus_visibility_counts,
 )
 from .stage3_splat_temporal_diagnostics import _read_colmap
 
@@ -20,17 +21,19 @@ def region_visibility_counts(
     poses: list[tuple[np.ndarray, np.ndarray]],
     intrinsics: tuple[float, float, float, float, int, int],
     region_count: int,
+    *,
+    backend: str = "python",
+    num_threads: int = 1,
 ) -> tuple[np.ndarray, list[np.ndarray]]:
     if region_count < 1 or region_count > len(poses):
         raise ValueError("region_count must be between one and the camera count")
     regions = [indices for indices in np.array_split(np.arange(len(poses)), region_count)]
-    counts = np.zeros((region_count, len(points)), dtype=np.uint16)
+    counts = np.zeros((region_count, len(points)), dtype=np.uint16 if backend == "python" else np.uint32)
     for region_index, camera_indices in enumerate(regions):
-        for camera_index in camera_indices:
-            rotation, translation = poses[int(camera_index)]
-            counts[region_index] += _visible_mask(
-                points, rotation, translation, intrinsics
-            )
+        counts[region_index] = focus_visibility_counts(
+            points, [poses[int(i)] for i in camera_indices], intrinsics,
+            backend=backend, num_threads=num_threads,
+        )
     return counts, regions
 
 
@@ -126,6 +129,8 @@ def balance_colmap_seed_cloud_globally(
     baseline_points: int = 100_000,
     region_count: int = 12,
     min_region_views: int = 2,
+    backend: str = "python",
+    num_threads: int = 1,
 ) -> dict[str, object]:
     if output_dir.exists():
         raise FileExistsError(f"output directory already exists: {output_dir}")
@@ -135,7 +140,7 @@ def balance_colmap_seed_cloud_globally(
     poses = [(rotation, translation) for _, rotation, translation in pose_records]
     points, colors = _load_ascii_ply(source_cloud)
     counts, regions = region_visibility_counts(
-        points, poses, intrinsics, region_count
+        points, poses, intrinsics, region_count, backend=backend, num_threads=num_threads
     )
     if not 0 <= baseline_points <= total_points:
         raise ValueError("baseline_points must be between zero and total_points")
@@ -222,6 +227,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--baseline-points", type=int, default=100_000)
     parser.add_argument("--region-count", type=int, default=12)
     parser.add_argument("--min-region-views", type=int, default=2)
+    parser.add_argument("--backend", choices=("python", "cpp"), default="python")
+    parser.add_argument("--num-threads", type=int, default=1)
     return parser
 
 
@@ -235,6 +242,8 @@ def main(argv: list[str] | None = None) -> None:
         baseline_points=args.baseline_points,
         region_count=args.region_count,
         min_region_views=args.min_region_views,
+        backend=args.backend,
+        num_threads=args.num_threads,
     )
     print(json.dumps(summary, indent=2))
 

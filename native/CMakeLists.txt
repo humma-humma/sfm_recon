@@ -1,0 +1,31 @@
+cmake_minimum_required(VERSION 3.19)
+project(sfm_native LANGUAGES CXX)
+find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+# A standalone pybind11 install or the headers bundled with PyTorch work.
+if(NOT PYBIND11_INCLUDE_DIR)
+  execute_process(COMMAND "${Python_EXECUTABLE}" -c
+    "import importlib.util,pathlib; s=importlib.util.find_spec('pybind11'); print(__import__('pybind11').get_include() if s else pathlib.Path(importlib.util.find_spec('torch').origin).parent/'include')"
+    OUTPUT_VARIABLE PYBIND11_INCLUDE_DIR OUTPUT_STRIP_TRAILING_WHITESPACE
+    COMMAND_ERROR_IS_FATAL ANY)
+endif()
+Python_add_library(_native MODULE WITH_SOABI kernels.cpp)
+find_package(Threads REQUIRED)
+target_link_libraries(_native PRIVATE Threads::Threads)
+target_include_directories(_native PRIVATE "${PYBIND11_INCLUDE_DIR}")
+target_compile_features(_native PRIVATE cxx_std_17)
+if(MSVC)
+  target_compile_options(_native PRIVATE /O2 /EHsc)
+else()
+  target_compile_options(_native PRIVATE -O3)
+endif()
+install(TARGETS _native LIBRARY DESTINATION . RUNTIME DESTINATION .)
+option(SFM_WITH_CERES "Build optional Ceres bundle adjustment" OFF)
+if(SFM_WITH_CERES)
+  enable_language(C) # SuiteSparse dependencies discover OpenMP for C.
+  find_package(Ceres 2.2 REQUIRED)
+  Python_add_library(_ceres MODULE WITH_SOABI ceres_bundle.cpp)
+  target_include_directories(_ceres PRIVATE "${PYBIND11_INCLUDE_DIR}")
+  target_compile_features(_ceres PRIVATE cxx_std_17)
+  target_link_libraries(_ceres PRIVATE Ceres::ceres)
+  install(TARGETS _ceres LIBRARY DESTINATION . RUNTIME DESTINATION .)
+endif()

@@ -1,0 +1,62 @@
+{
+  "status": "complete",
+  "depth_cleanup": "rejected",
+  "promotion_policy": "retain existing presentations when the predeclared per-view gate fails",
+  "geometry_and_presentation_are_selected_separately": true,
+  "datasets": {
+    "box": {
+      "geometry_preset": "configs/presets/stage1_box_fast.json",
+      "fresh_geometry": "outputs/splat_refresh_v1/reconstruction/box",
+      "fresh_trained_model": "outputs/splat_refresh_v1/train/box/splatfacto/run_30000",
+      "presentation_config": "outputs/splat_refresh_v1/train/box/splatfacto/run_30000/config.yml",
+      "presentation_checkpoint": "outputs/splat_refresh_v1/train/box/splatfacto/run_30000/nerfstudio_models/step-000029999.ckpt",
+      "decision": "first_box_baseline",
+      "reason": "No historical box splat; reviewed as a first baseline"
+    },
+    "boot": {
+      "geometry_preset": "configs/presets/stage2_boot_fast.json",
+      "fresh_geometry": "outputs/splat_refresh_v1/reconstruction/boot",
+      "fresh_trained_model": "outputs/splat_refresh_v1/train/boot/splatfacto/run_30000",
+      "presentation_config": "outputs/stage2_boot_splatfacto/boot_half_fixed_pose/splatfacto/run_30000/config.yml",
+      "presentation_checkpoint": "outputs/stage2_boot_splatfacto/boot_half_fixed_pose/splatfacto/run_30000/nerfstudio_models/step-000029999.ckpt",
+      "decision": "retain_existing_presentation",
+      "reason": "Refreshed model failed the predeclared gate; preserve per-view rendering quality"
+    },
+    "milk": {
+      "geometry_preset": "configs/presets/stage2_milk_fast.json",
+      "fresh_geometry": "outputs/splat_refresh_v1/reconstruction/milk",
+      "fresh_trained_model": "outputs/splat_refresh_v1/train/milk/splatfacto/run_30000",
+      "presentation_config": "outputs/stage2_milk_splatfacto/milk_half_fixed_pose/splatfacto/run_30000/config.yml",
+      "presentation_checkpoint": "outputs/stage2_milk_splatfacto/milk_half_fixed_pose/splatfacto/run_30000/nerfstudio_models/step-000029999.ckpt",
+      "decision": "retain_existing_presentation",
+      "reason": "Refreshed model failed the predeclared gate; preserve per-view rendering quality"
+    },
+    "scene": {
+      "geometry_preset": "configs/presets/stage3_scene.json",
+      "fresh_geometry": "outputs/splat_refresh_v1/reconstruction/scene",
+      "fresh_trained_model": "outputs/splat_refresh_v1/train/scene/splatfacto/run_5000",
+      "presentation_config": "outputs/stage3_splatfacto_stair_cleanup_frustum/stage3_stride16_stair_cleanup_frustum/splatfacto/run_5000/config.yml",
+      "presentation_checkpoint": "outputs/stage3_splatfacto_stair_cleanup_frustum/stage3_stride16_stair_cleanup_frustum/splatfacto/run_5000/nerfstudio_models/step-000004999.ckpt",
+      "decision": "retain_existing_presentation",
+      "reason": "Refreshed model failed the predeclared gate; preserve per-view rendering quality"
+    }
+  },
+  "visual_review": {
+    "scope": "sampled contact sheets plus worst-regression frames, not every novel view",
+    "reviewed": [
+      "scene_old",
+      "scene_new",
+      "new_scene_depth",
+      "milk_new",
+      "boot_new",
+      "box_new",
+      "boot_old/000_img.png",
+      "milk_old/001_img.png",
+      "scene_old/012_img.png",
+      "scene_new/012_img.png",
+      "old_scene_loose/012_img.png"
+    ],
+    "findings": "Refreshed scene sharpens the lab signage but worsens the 51.501833 s staircase view; milk 00226 becomes washed out. Depth cleanup damages surface detail. Box reconstructs the carton with remaining background artifacts.",
+    "opacity_coverage_limitation": "Coverage is near 100% even on visibly poor renders; it cannot establish surface quality here."
+  }
+}

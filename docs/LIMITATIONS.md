@@ -41,8 +41,18 @@
 
 ## High-value next steps
 
-1. Add a small redistributable synthetic fixture for end-to-end CI.
-2. Introduce benchmark tooling for matching, triangulation, and optimization.
-3. Port a bounded geometry/optimization backend to C++ using Eigen, Ceres,
-   CMake, and pybind11 while preserving Python numerical regression tests.
-4. Add stronger spatial support priors for the stairs and weak surroundings.
+1. Validate physical RGB/depth alignment and improve local pose consistency in
+   the corridor and stair entrance. The current diagnostics do not isolate a
+   single cause of their errors.
+2. Extend the measured-depth research comparison with independent datasets and
+   repeated runs; the present ablation is exploratory, not statistical validation.
+3. Compare surface representations such as 2DGS if reliable alignment/depth
+   supervision still leaves poor geometry. These methods are not implemented here.
+4. Perform browser/device interaction QA and add collision only against validated
+   surfaces. The demo currently provides free flight, not collision-safe walking.
+
+Optional C++/Ceres backends and benchmark tooling are now implemented and
+evaluated; see [native follow-up](CPP_FOLLOWUP.md). Measured-depth supervision
+and a confidence-masked TSDF baseline are documented in
+[research results](DEPTH_RESEARCH_RESULTS.md). Missing sensor observations and
+low local coverage remain limitations even when visible mesh surfaces are accurate.

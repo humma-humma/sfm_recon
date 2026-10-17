@@ -1,0 +1,77 @@
+name: Native wheels
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['native/**', 'setup.py', 'build_backend.py', 'MANIFEST.in', 'pyproject.toml', 'src/**', 'tests/**', 'scripts/collect_native_licenses.py', '.github/workflows/native-wheels.yml']
+  push:
+    branches: [main]
+    paths: ['native/**', 'setup.py', 'build_backend.py', 'MANIFEST.in', 'pyproject.toml', 'src/**', 'tests/**', 'scripts/collect_native_licenses.py', '.github/workflows/native-wheels.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-14]
+        python: ['3.10', '3.11']
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: ${{ matrix.python }}
+          activate-environment: sfm-native
+          auto-activate-base: false
+          channels: conda-forge
+          channel-priority: strict
+      - name: Install build and solver dependencies
+        run: |
+          conda install --yes --override-channels -c conda-forge 'ceres-solver=2.2.0' eigen cmake pybind11 'setuptools>=77' wheel
+          python -m pip install build pytest numpy scipy opencv-python
+          python scripts/collect_native_licenses.py --prefix "$CONDA_PREFIX"
+      - name: Build platform wheel
+        env:
+          SFM_BUILD_NATIVE: '1'
+          SFM_WITH_CERES: '1'
+        run: |
+          export SFM_CERES_PREFIX="$CONDA_PREFIX"
+          if [ "$RUNNER_OS" = macOS ]; then export MACOSX_DEPLOYMENT_TARGET=14.0; fi
+          python -m build --wheel --no-isolation
+      - name: Repair Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          python -m pip install auditwheel patchelf
+          export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"
+          auditwheel repair dist/*.whl -w wheelhouse --plat manylinux_2_39_x86_64
+      - name: Repair Windows dependencies
+        if: runner.os == 'Windows'
+        run: |
+          python -m pip install delvewheel
+          python -m delvewheel repair dist/*.whl --add-path "$CONDA_PREFIX/Library/bin" -w wheelhouse
+      - name: Repair macOS dependencies
+        if: runner.os == 'macOS'
+        run: |
+          python -m pip install delocate
+          export DYLD_LIBRARY_PATH="$CONDA_PREFIX/lib:${DYLD_LIBRARY_PATH:-}"
+          delocate-wheel -v -w wheelhouse dist/*.whl
+      - name: Test installed repaired wheel outside source tree
+        run: |
+          python -m venv "$RUNNER_TEMP/sfm-wheel-test"
+          if [ "$RUNNER_OS" = Windows ]; then PY="$RUNNER_TEMP/sfm-wheel-test/Scripts/python.exe"; else PY="$RUNNER_TEMP/sfm-wheel-test/bin/python"; fi
+          "$PY" -m pip install wheelhouse/*.whl pytest
+          cp tests/test_native_backend.py tests/test_ceres_backend.py tests/test_splat_native.py "$RUNNER_TEMP/"
+          cd "$RUNNER_TEMP"
+          unset PYTHONPATH SFM_CERES_DLL_DIR LD_LIBRARY_PATH DYLD_LIBRARY_PATH
+          "$PY" -c "from sfm_reconstruction.native_backend import load_native, load_ceres; load_native(); print(load_ceres().version)"
+          "$PY" -m pytest test_native_backend.py test_ceres_backend.py test_splat_native.py -q
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.os }}-py${{ matrix.python }}
+          path: wheelhouse/*.whl

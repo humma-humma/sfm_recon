@@ -1,0 +1,63 @@
+{
+  "name": "stage1_box_fast",
+  "dataset": "../Experiments/Stage_1_Data_ver._4/Stage_1_Data_ver_4/stage1/box",
+  "correspondences": null,
+  "reconstruction": {
+    "track_tolerance": 0.001,
+    "min_track_observations": 2,
+    "essential_threshold": 1.0,
+    "pnp_reprojection_error": 4.0,
+    "max_reprojection_error": 5.0,
+    "min_triangulation_angle": 0.5,
+    "min_pnp_points": 12,
+    "min_pnp_inliers": 10,
+    "bundle_adjustment": true,
+    "bundle_adjustment_max_nfev": 40,
+    "max_point_distance_factor": null,
+    "two_view_max_reprojection_error": null,
+    "two_view_min_triangulation_angle": null,
+    "initial_pose_correspondence_dir": null,
+    "bundle_adjustment_backend": "ceres",
+    "geometry_backend": "cpp",
+    "ceres_max_iterations": 100,
+    "ceres_num_threads": 4,
+    "ceres_linear_solver": "dense_schur",
+    "bundle_adjustment_loss_scale": 2.0,
+    "bundle_adjustment_max_reprojection_error": 5.0
+  },
+  "reference_case": "min_triangulation_angle_0.5",
+  "expected_metrics": {
+    "cameras": 46,
+    "points": 5776,
+    "pose_metrics": {
+      "cameras": 46,
+      "scale": 1.0180023728349936,
+      "mean_rotation_radians": 0.009784031820474447,
+      "mean_rotation_degrees": 0.5605837299348854,
+      "median_rotation_degrees": 0.6065762382770906,
+      "mean_translation": 0.03350538336100416,
+      "median_translation": 0.032449280201573866
+    },
+    "reprojection_rmse_px": 1.3323272972110527,
+    "image_coverage": 0.38552989130434784,
+    "point_metrics": {
+      "ground_truth_points": 560976,
+      "estimated_points": 5776,
+      "mean_ground_truth_to_estimate": 0.3587360807342248,
+      "mean_estimate_to_ground_truth": 0.06921826382889523,
+      "chamfer_distance": 0.42795434456312004
+    }
+  },
+  "note": "Dataset-specific exploratory tuning. Paths are relative to the repository root. Cached correspondence family is part of the recipe. Boot metrics measure consistency only; no full GT. Defaults are unchanged.",
+  "performance_confirmation": {
+    "option": "dense_schur_4threads",
+    "seconds": {
+      "baseline": 10.213887199992314,
+      "selected": 9.947465300094336
+    },
+    "identical_ids": true,
+    "max_camera_matrix_difference": 8.615330671091215e-14,
+    "max_point_distance": 9.451770900809164e-13,
+    "equivalent": true
+  }
+}

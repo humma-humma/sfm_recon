@@ -1,0 +1,19 @@
+<!doctype html><html><meta charset="utf-8"><title>Full scene — 15-view GNT</title>
+<style>body{max-width:1400px;margin:24px auto;padding:0 16px;background:#121720;color:#eee;font:16px system-ui}a{color:#8cf}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}video{width:100%;display:block}h2{font-size:18px;min-height:50px}button,select{padding:9px;margin:5px}input{width:300px}#preview{max-width:640px;width:100%}@media(max-width:800px){.grid{grid-template-columns:1fr}}</style>
+<h1>Full scene — GNT at 15 views per second</h1><p>The captured scene route at 960 × 540. Native output contains 2,198 GNT views over 146.53 seconds; the second export uses the tested FFmpeg motion compensation to produce 30 fps playback. No splats are mixed in. This run extends the outdoor decision test to the full route; indoor and dynamic-scene interpolation quality still needs visual review.</p>
+<p id="progress">Checking progress…</p><div id="preview_box"><p>Latest newly rendered view</p><img id="preview" alt="Latest GNT render"></div>
+<button id="play">Play both from start</button><button id="pause">Pause both</button><label>Speed <select id="speed"><option value="1">1×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option></select></label>
+<label>Seek together <input id="seek" type="range" min="0" max="146.5" step="0.033333333" value="0"></label>
+<div class="grid"><section><h2>1. Genuine GNT — 15 independent views/s</h2><video id="native" controls muted playsinline preload="metadata" src="assets/gnt_finalization/scene15/scene15_native.mp4"></video><a href="assets/gnt_finalization/scene15/scene15_native.mp4" download>Download MP4</a></section><section><h2>2. GNT at 15 views/s — motion compensated to 30 fps</h2><video id="motion" controls muted playsinline preload="metadata" src="assets/gnt_finalization/scene15/scene15_motion.mp4"></video><a href="assets/gnt_finalization/scene15/scene15_motion.mp4" download>Download MP4</a></section></div>
+<script>const ready=true,videos=[...document.querySelectorAll('video')],prefix='assets/gnt_finalization/scene15/';
+async function status(){try{const r=await fetch(prefix+'progress.json',{cache:'no-store'});if(!r.ok)throw Error('pending');const p=await r.json();const eta=p.estimated_remaining_seconds>0?' · approximately '+(p.estimated_remaining_seconds/3600).toFixed(1)+' hours of rendering left':'';
+document.getElementById('progress').textContent=p.status+' · '+p.completed+'/'+p.total+' views · '+p.reused+' reused'+eta;
+if(p.latest_frame&&!ready){document.getElementById('preview_box').hidden=false;document.getElementById('preview').src=prefix+p.latest_frame;}else document.getElementById('preview_box').hidden=true;
+if(p.status==='complete'&&!ready)location.reload();}catch(e){document.getElementById('progress').textContent='Queued / preflight';document.getElementById('preview_box').hidden=true;}}
+status();setInterval(status,30000);
+document.getElementById('play').disabled=document.getElementById('pause').disabled=!ready;
+document.getElementById('play').onclick=async()=>{videos.forEach(v=>{v.pause();v.currentTime=0;});await Promise.all(videos.map(v=>v.play()));};
+document.getElementById('pause').onclick=()=>videos.forEach(v=>v.pause());
+document.getElementById('seek').oninput=e=>videos.forEach(v=>{v.pause();v.currentTime=+e.target.value;});
+document.getElementById('speed').onchange=e=>videos.forEach(v=>v.playbackRate=+e.target.value);
+</script></html>

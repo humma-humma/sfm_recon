@@ -73,6 +73,8 @@ def export_stage3_spatial_submaps(
     overlap_cameras: int = 8,
     max_points: int = 200_000,
     min_views: int = 2,
+    backend: str = "python",
+    num_threads: int = 1,
 ) -> dict[str, object]:
     if output_root.exists():
         raise FileExistsError(f"output directory already exists: {output_root}")
@@ -100,6 +102,8 @@ def export_stage3_spatial_submaps(
                 colors,
                 max_points=max_points,
                 min_views=min_views,
+                backend=backend,
+                num_threads=num_threads,
                 selection={
                     "cluster_index": cluster_index,
                     "core_cameras": core_count,
@@ -136,6 +140,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--overlap-cameras", type=int, default=8)
     parser.add_argument("--max-points", type=int, default=200_000)
     parser.add_argument("--min-views", type=int, default=2)
+    parser.add_argument("--backend", choices=("python", "cpp"), default="python")
+    parser.add_argument("--num-threads", type=int, default=1)
     return parser
 
 
@@ -149,6 +155,8 @@ def main(argv: list[str] | None = None) -> None:
         overlap_cameras=args.overlap_cameras,
         max_points=args.max_points,
         min_views=args.min_views,
+        backend=args.backend,
+        num_threads=args.num_threads,
     )
     print(json.dumps(summary, indent=2))
 

@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 
 from .models import Pose
+from .native_backend import load_native, validate_backend
 
 
 @dataclass(frozen=True)
@@ -21,9 +22,12 @@ class PnPEstimate:
 
 
 def project_points(
-    points_3d: np.ndarray, pose: Pose, intrinsics: np.ndarray
+    points_3d: np.ndarray, pose: Pose, intrinsics: np.ndarray, *, backend: str = "python"
 ) -> np.ndarray:
     points_3d = np.asarray(points_3d, dtype=np.float64).reshape(-1, 3)
+    if backend != "python":
+        validate_backend(backend)
+        return load_native().project_points(points_3d, pose.rotation, pose.translation.ravel(), intrinsics)
     camera_points = (pose.rotation @ points_3d.T + pose.translation).T
     pixels_h = (np.asarray(intrinsics) @ camera_points.T).T
     return pixels_h[:, :2] / pixels_h[:, 2:3]
@@ -95,7 +99,12 @@ def triangulate_points(
     return (homogeneous[:3] / homogeneous[3]).T
 
 
-def points_in_front(points_3d: np.ndarray, pose: Pose) -> np.ndarray:
+def points_in_front(points_3d: np.ndarray, pose: Pose, *, backend: str = "python") -> np.ndarray:
+    if backend != "python":
+        validate_backend(backend)
+        return load_native().points_in_front(
+            np.asarray(points_3d, dtype=np.float64).reshape(-1, 3), pose.rotation, pose.translation.ravel()
+        )
     camera_points = (
         pose.rotation @ np.asarray(points_3d, dtype=np.float64).reshape(-1, 3).T
         + pose.translation
@@ -108,7 +117,15 @@ def reprojection_errors(
     observations: np.ndarray,
     pose: Pose,
     intrinsics: np.ndarray,
+    *, backend: str = "python",
 ) -> np.ndarray:
+    if backend != "python":
+        validate_backend(backend)
+        return load_native().reprojection_errors(
+            np.asarray(points_3d, dtype=np.float64).reshape(-1, 3),
+            np.asarray(observations, dtype=np.float64).reshape(-1, 2),
+            pose.rotation, pose.translation.ravel(), intrinsics,
+        )
     projections = project_points(points_3d, pose, intrinsics)
     return np.linalg.norm(
         projections - np.asarray(observations, dtype=np.float64).reshape(-1, 2),
@@ -117,9 +134,12 @@ def reprojection_errors(
 
 
 def triangulation_angles(
-    points_3d: np.ndarray, first_pose: Pose, second_pose: Pose
+    points_3d: np.ndarray, first_pose: Pose, second_pose: Pose, *, backend: str = "python"
 ) -> np.ndarray:
     points = np.asarray(points_3d, dtype=np.float64).reshape(-1, 3)
+    if backend != "python":
+        validate_backend(backend)
+        return load_native().triangulation_angles(points, first_pose.camera_center, second_pose.camera_center)
     first_rays = points - first_pose.camera_center
     second_rays = points - second_pose.camera_center
     first_rays /= np.linalg.norm(first_rays, axis=1, keepdims=True)

@@ -59,7 +59,23 @@ def focus_visibility_counts(
     points: np.ndarray,
     focus_poses: list[tuple[np.ndarray, np.ndarray]],
     intrinsics: tuple[float, float, float, float, int, int],
+    *,
+    backend: str = "python",
+    num_threads: int = 1,
 ) -> np.ndarray:
+    if backend not in {"python", "cpp"}:
+        raise ValueError("backend must be python or cpp")
+    if num_threads < 1:
+        raise ValueError("num_threads must be positive")
+    if backend == "cpp":
+        from .native_backend import load_native
+
+        return load_native().camera_support(
+            points,
+            np.asarray([r for r, _ in focus_poses]).reshape(-1, 3, 3),
+            np.asarray([t for _, t in focus_poses]).reshape(-1, 3),
+            np.asarray(intrinsics[:4]), intrinsics[4], intrinsics[5], num_threads,
+        )
     counts = np.zeros(len(points), dtype=np.uint16)
     for rotation, translation in focus_poses:
         counts += _visible_mask(points, rotation, translation, intrinsics)
@@ -108,6 +124,8 @@ def rebalance_colmap_seed_cloud(
     total_points: int = 200_000,
     focus_points: int = 80_000,
     min_focus_views: int = 2,
+    backend: str = "python",
+    num_threads: int = 1,
 ) -> dict[str, object]:
     if focus_end <= focus_start:
         raise ValueError("focus_end must be greater than focus_start")
@@ -125,7 +143,8 @@ def rebalance_colmap_seed_cloud(
         raise ValueError("no COLMAP cameras fall inside the focus interval")
 
     points, colors = _load_ascii_ply(source_cloud)
-    visibility_counts = focus_visibility_counts(points, focus_pose_records, intrinsics)
+    visibility_counts = focus_visibility_counts(points, focus_pose_records, intrinsics,
+                                                backend=backend, num_threads=num_threads)
     selected = select_rebalanced_indices(
         visibility_counts,
         total_points=total_points,
@@ -184,6 +203,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--total-points", type=int, default=200_000)
     parser.add_argument("--focus-points", type=int, default=80_000)
     parser.add_argument("--min-focus-views", type=int, default=2)
+    parser.add_argument("--backend", choices=("python", "cpp"), default="python")
+    parser.add_argument("--num-threads", type=int, default=1)
     return parser
 
 
@@ -198,6 +219,8 @@ def main(argv: list[str] | None = None) -> None:
         total_points=args.total_points,
         focus_points=args.focus_points,
         min_focus_views=args.min_focus_views,
+        backend=args.backend,
+        num_threads=args.num_threads,
     )
     print(json.dumps(summary, indent=2))
 

@@ -38,10 +38,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip final global bundle adjustment.",
     )
     parser.add_argument("--bundle-adjustment-max-nfev", type=int, default=40)
+    parser.add_argument("--bundle-adjustment-backend", choices=("python", "cpp", "ceres"), default="python")
+    parser.add_argument("--ceres-max-iterations", type=int, default=100)
+    parser.add_argument("--ceres-num-threads", type=int, default=1)
+    parser.add_argument("--ceres-linear-solver", choices=("dense_schur", "sparse_schur", "iterative_schur"), default="dense_schur")
+    parser.add_argument("--bundle-adjustment-loss-scale", type=float, default=2.0)
+    parser.add_argument("--bundle-adjustment-max-reprojection-error", type=float)
+    parser.add_argument("--geometry-backend", choices=("python", "cpp"), default="python")
     parser.add_argument("--min-pnp-points", type=int, default=12)
     parser.add_argument("--min-pnp-inliers", type=int, default=10)
     parser.add_argument("--min-track-observations", type=int, default=2)
     parser.add_argument("--max-reprojection-error", type=float, default=5.0)
+    parser.add_argument("--min-triangulation-angle", type=float, default=1.0)
+    parser.add_argument("--essential-threshold", type=float, default=1.0)
     parser.add_argument("--max-point-distance-factor", type=float)
     parser.add_argument("--two-view-max-reprojection-error", type=float)
     parser.add_argument("--two-view-min-triangulation-angle", type=float)
@@ -149,10 +158,19 @@ def main(argv: list[str] | None = None) -> None:
     config = ReconstructionConfig(
         bundle_adjustment=not args.no_bundle_adjustment,
         bundle_adjustment_max_nfev=args.bundle_adjustment_max_nfev,
+        bundle_adjustment_backend=args.bundle_adjustment_backend,
+        ceres_max_iterations=args.ceres_max_iterations,
+        ceres_num_threads=args.ceres_num_threads,
+        ceres_linear_solver=args.ceres_linear_solver,
+        bundle_adjustment_loss_scale=args.bundle_adjustment_loss_scale,
+        bundle_adjustment_max_reprojection_error=args.bundle_adjustment_max_reprojection_error,
+        geometry_backend=args.geometry_backend,
         min_pnp_points=args.min_pnp_points,
         min_pnp_inliers=args.min_pnp_inliers,
         min_track_observations=args.min_track_observations,
         max_reprojection_error=args.max_reprojection_error,
+        min_triangulation_angle=args.min_triangulation_angle,
+        essential_threshold=args.essential_threshold,
         max_point_distance_factor=args.max_point_distance_factor,
         two_view_max_reprojection_error=args.two_view_max_reprojection_error,
         two_view_min_triangulation_angle=args.two_view_min_triangulation_angle,

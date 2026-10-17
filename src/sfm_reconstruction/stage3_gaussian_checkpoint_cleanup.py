@@ -96,6 +96,8 @@ def clean_gaussian_checkpoint(
     max_gaussian_scale: float,
     max_seed_distance: float,
     min_camera_support: int,
+    backend: str = "python",
+    num_threads: int = 1,
 ) -> dict[str, object]:
     import torch
 
@@ -120,6 +122,8 @@ def clean_gaussian_checkpoint(
         original_means,
         [(rotation, translation) for _, rotation, translation in pose_records],
         intrinsics,
+        backend=backend,
+        num_threads=num_threads,
     )
     keep = cleanup_mask(
         opacity,
@@ -147,6 +151,8 @@ def clean_gaussian_checkpoint(
         "source_checkpoint": str(source_checkpoint.resolve()),
         "source_cloud": str(source_cloud.resolve()),
         "uses_ground_truth": False,
+        "support_backend": backend,
+        "support_threads": num_threads,
         "source_gaussians": len(keep),
         "kept_gaussians": int(np.count_nonzero(keep)),
         "removed_gaussians": int(np.count_nonzero(~keep)),
@@ -179,6 +185,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-gaussian-scale", type=float, default=0.02)
     parser.add_argument("--max-seed-distance", type=float, default=0.05)
     parser.add_argument("--min-camera-support", type=int, default=2)
+    parser.add_argument("--backend", choices=("python", "cpp"), default="python")
+    parser.add_argument("--num-threads", type=int, default=1)
     return parser
 
 
@@ -195,6 +203,8 @@ def main(argv: list[str] | None = None) -> None:
         max_gaussian_scale=args.max_gaussian_scale,
         max_seed_distance=args.max_seed_distance,
         min_camera_support=args.min_camera_support,
+        backend=args.backend,
+        num_threads=args.num_threads,
     )
     print(json.dumps(summary, indent=2))
 

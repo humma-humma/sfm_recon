@@ -35,6 +35,13 @@ class ReconstructionConfig:
     two_view_max_reprojection_error: float | None = None
     two_view_min_triangulation_angle: float | None = None
     initial_pose_correspondence_dir: Path | None = None
+    bundle_adjustment_backend: str = "python"
+    geometry_backend: str = "python"
+    ceres_max_iterations: int = 100
+    ceres_num_threads: int = 1
+    ceres_linear_solver: str = "dense_schur"
+    bundle_adjustment_loss_scale: float = 2.0
+    bundle_adjustment_max_reprojection_error: float | None = None
 
 
 def _filter_points(
@@ -93,6 +100,7 @@ def _filter_points(
                 tracks[track_id].observations[image_id].reshape(1, 2),
                 pose,
                 intrinsics,
+                backend=config.geometry_backend,
             )[0]
             if error <= config.max_reprojection_error:
                 valid_cameras.append(image_id)
@@ -106,6 +114,7 @@ def _filter_points(
                     point.reshape(1, 3),
                     poses[first_id],
                     poses[second_id],
+                    backend=config.geometry_backend,
                 )[0]
                 for index, first_id in enumerate(valid_cameras)
                 for second_id in valid_cameras[index + 1 :]
@@ -167,15 +176,15 @@ def _valid_triangulations(
     config: ReconstructionConfig,
 ) -> np.ndarray:
     finite = np.isfinite(points_3d).all(axis=1)
-    cheirality = points_in_front(points_3d, first_pose) & points_in_front(
-        points_3d, second_pose
+    cheirality = points_in_front(points_3d, first_pose, backend=config.geometry_backend) & points_in_front(
+        points_3d, second_pose, backend=config.geometry_backend
     )
-    angles = triangulation_angles(points_3d, first_pose, second_pose)
+    angles = triangulation_angles(points_3d, first_pose, second_pose, backend=config.geometry_backend)
     first_error = reprojection_errors(
-        points_3d, first_points, first_pose, intrinsics
+        points_3d, first_points, first_pose, intrinsics, backend=config.geometry_backend
     )
     second_error = reprojection_errors(
-        points_3d, second_points, second_pose, intrinsics
+        points_3d, second_points, second_pose, intrinsics, backend=config.geometry_backend
     )
     return (
         finite
@@ -270,6 +279,7 @@ def _initialize(
                 points_3d[valid],
                 first_pose,
                 second_pose,
+                backend=config.geometry_backend,
             )
         ))
         initialization_score = len(initialized_points) * min(median_angle, 15.0)
@@ -354,6 +364,7 @@ def _triangulate_new_tracks(
                 track.observations[image_id].reshape(1, 2),
                 poses[image_id],
                 intrinsics,
+                backend=config.geometry_backend,
             )[0]
             for image_id in visible
         ]
@@ -369,6 +380,10 @@ def reconstruct(
     config: ReconstructionConfig | None = None,
 ) -> ReconstructionResult:
     config = config or ReconstructionConfig()
+    from .native_backend import validate_backend
+
+    validate_backend(config.bundle_adjustment_backend, allow_ceres=True)
+    validate_backend(config.geometry_backend)
     track_result = build_tracks(
         dataset,
         config.track_tolerance,
@@ -424,8 +439,15 @@ def reconstruct(
             poses,
             points,
             fixed_camera_ids=set(initial_pair),
+            backend=config.bundle_adjustment_backend,
             max_nfev=config.bundle_adjustment_max_nfev,
-            max_reprojection_error=config.max_reprojection_error,
+            ceres_max_iterations=config.ceres_max_iterations,
+            ceres_num_threads=config.ceres_num_threads,
+            ceres_linear_solver=config.ceres_linear_solver,
+            loss_scale=config.bundle_adjustment_loss_scale,
+            max_reprojection_error=(config.bundle_adjustment_max_reprojection_error
+                if config.bundle_adjustment_max_reprojection_error is not None
+                else config.max_reprojection_error),
         )
     points = _filter_points(
         dataset.intrinsics,
@@ -474,8 +496,15 @@ def retriangulate_with_poses(
             poses,
             points,
             fixed_camera_ids=set(result.initial_pair),
+            backend=config.bundle_adjustment_backend,
             max_nfev=config.bundle_adjustment_max_nfev,
-            max_reprojection_error=config.max_reprojection_error,
+            ceres_max_iterations=config.ceres_max_iterations,
+            ceres_num_threads=config.ceres_num_threads,
+            ceres_linear_solver=config.ceres_linear_solver,
+            loss_scale=config.bundle_adjustment_loss_scale,
+            max_reprojection_error=(config.bundle_adjustment_max_reprojection_error
+                if config.bundle_adjustment_max_reprojection_error is not None
+                else config.max_reprojection_error),
         )
         points = _filter_points(
             dataset.intrinsics,

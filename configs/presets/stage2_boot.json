@@ -1,0 +1,37 @@
+{
+  "name": "stage2_boot",
+  "dataset": "../Experiments/Stage_2_Data/stage2/boot",
+  "correspondences": "outputs/stage2_boot_improved/matching_cache/correspondences",
+  "reconstruction": {
+    "track_tolerance": 0.001,
+    "min_track_observations": 3,
+    "essential_threshold": 0.5,
+    "pnp_reprojection_error": 4.0,
+    "max_reprojection_error": 5.0,
+    "min_triangulation_angle": 1.0,
+    "min_pnp_points": 12,
+    "min_pnp_inliers": 10,
+    "bundle_adjustment": true,
+    "bundle_adjustment_max_nfev": 40,
+    "max_point_distance_factor": 1.5,
+    "two_view_max_reprojection_error": null,
+    "two_view_min_triangulation_angle": null,
+    "initial_pose_correspondence_dir": null,
+    "bundle_adjustment_backend": "ceres",
+    "geometry_backend": "cpp",
+    "ceres_max_iterations": 100,
+    "ceres_num_threads": 1,
+    "ceres_linear_solver": "dense_schur",
+    "bundle_adjustment_loss_scale": 2.0,
+    "bundle_adjustment_max_reprojection_error": 3.0
+  },
+  "reference_case": "essential_threshold_0.5",
+  "expected_metrics": {
+    "cameras": 51,
+    "points": 1257,
+    "pose_metrics": null,
+    "reprojection_rmse_px": 2.9913173845840726,
+    "image_coverage": 0.14307598039215685
+  },
+  "note": "Dataset-specific exploratory tuning. Paths are relative to the repository root. Cached correspondence family is part of the recipe. Boot metrics measure consistency only; no full GT. Defaults are unchanged."
+}

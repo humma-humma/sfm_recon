@@ -61,12 +61,15 @@ def _write_pose_subset(
     max_points: int,
     min_views: int,
     selection: dict[str, object],
+    backend: str = "python",
+    num_threads: int = 1,
 ) -> dict[str, object]:
     if len(selected_poses) < 2:
         raise ValueError(f"submap {name!r} contains fewer than two cameras")
 
     pose_values = [(rotation, translation) for _, rotation, translation in selected_poses]
-    visibility = focus_visibility_counts(points, pose_values, intrinsics)
+    visibility = focus_visibility_counts(points, pose_values, intrinsics,
+                                        backend=backend, num_threads=num_threads)
     selected_indices = select_local_seed_indices(
         visibility, max_points=max_points, min_views=min_views
     )
@@ -138,6 +141,8 @@ def _write_submap(
     *,
     max_points: int,
     min_views: int,
+    backend: str = "python",
+    num_threads: int = 1,
 ) -> dict[str, object]:
     selected_poses = [
         record
@@ -156,6 +161,8 @@ def _write_submap(
         max_points=max_points,
         min_views=min_views,
         selection={"start": spec.start, "end": spec.end},
+        backend=backend,
+        num_threads=num_threads,
     )
 
 
@@ -167,6 +174,8 @@ def export_stage3_gaussian_submaps(
     *,
     max_points: int = 200_000,
     min_views: int = 2,
+    backend: str = "python",
+    num_threads: int = 1,
 ) -> dict[str, object]:
     if not specs:
         raise ValueError("at least one submap is required")
@@ -189,6 +198,8 @@ def export_stage3_gaussian_submaps(
             colors,
             max_points=max_points,
             min_views=min_views,
+            backend=backend,
+            num_threads=num_threads,
         )
         for spec in specs
     ]
@@ -222,6 +233,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--max-points", type=int, default=200_000)
     parser.add_argument("--min-views", type=int, default=2)
+    parser.add_argument("--backend", choices=("python", "cpp"), default="python")
+    parser.add_argument("--num-threads", type=int, default=1)
     return parser
 
 
@@ -234,6 +247,8 @@ def main(argv: list[str] | None = None) -> None:
         [parse_submap_spec(value) for value in args.submap],
         max_points=args.max_points,
         min_views=args.min_views,
+        backend=args.backend,
+        num_threads=args.num_threads,
     )
     print(json.dumps(summary, indent=2))
 
