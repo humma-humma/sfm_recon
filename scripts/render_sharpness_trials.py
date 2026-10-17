@@ -14,12 +14,7 @@ from gsplat.rendering import rasterization
 from sfm_reconstruction.stage3_splat_temporal_diagnostics import _read_colmap
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA = {
-    'box': 'outputs/splat_refresh_v1/colmap/box',
-    'boot': 'outputs/stage2_boot_gaussian_colmap_half',
-    'milk': 'outputs/stage2_milk_gaussian_colmap_half',
-    'scene': 'outputs/stage3_gaussian_colmap_stride16_half_stair_rebalanced',
-}
+DATA = json.loads((ROOT/'configs/splatting/gnt_inputs.json').read_text(encoding='utf-8'))
 
 
 def main():

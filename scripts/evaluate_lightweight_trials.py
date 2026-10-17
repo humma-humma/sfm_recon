@@ -73,7 +73,7 @@ def main():
             for block in iter(lambda:stream.read(1024*1024),b''):digest.update(block)
         if digest.hexdigest()!=record['checkpoint_sha256']:raise RuntimeError(f'Control checkpoint changed: {name}')
         record['checkpoint_unchanged']=True
-    report['provenance']['environment']=dict(docker_image='ghcr.io/nerfstudio-project/nerfstudio:1.1.5',
+    report['provenance']['environment']=dict(docker_image='ghcr.io/nerfstudio-project/nerfstudio@sha256:b59b8e1012d7a43679d3234b3de9c8416a4b8435fcbf21b9d8c4494b8563f19e',
         docker_digest='sha256:b59b8e1012d7a43679d3234b3de9c8416a4b8435fcbf21b9d8c4494b8563f19e',
         gpu='NVIDIA GeForce RTX 2080 8 GiB',inference_torch='2.1.2+cu118',cuda_compiler='11.8.89',
         extension_architecture='sm75',scoring_torch=str(torch.__version__))

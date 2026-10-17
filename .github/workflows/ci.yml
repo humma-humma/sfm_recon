@@ -24,7 +24,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,evaluation,visualization]"
+          python -m pip install -c configs/environments/cpu-constraints.txt -e ".[dev,evaluation,visualization]"
       - name: Test
         run: python -m pytest -q -p no:cacheprovider
       - name: Verify CLI imports

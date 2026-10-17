@@ -54,5 +54,35 @@
     },
     "mesh_coverage": 0.6219932422448357
   },
-  "note": "Dataset-specific exploratory tuning. Paths are relative to the repository root. Cached correspondence family is part of the recipe. Boot metrics measure consistency only; no full GT. Defaults are unchanged."
+  "note": "Dataset-specific exploratory tuning. Paths are relative to the repository root. Cached correspondence family is part of the recipe. Boot metrics measure consistency only; no full GT. Defaults are unchanged.",
+  "matching": {
+    "max_features": 2500,
+    "feature_mode": "sift",
+    "sift_contrast_threshold": 0.03,
+    "sift_edge_threshold": 10.0,
+    "pair_window": 3,
+    "pair_source": "circular",
+    "ratio_threshold": 0.75,
+    "essential_threshold": 1.0,
+    "min_inliers": 15,
+    "mask_apriltags": true,
+    "apriltag_padding": 0.12,
+    "learned_device": "auto",
+    "learned_filter_threshold": 0.2,
+    "learned_cycle_filter": false,
+    "learned_min_cycle_matches": 15,
+    "learned_augment_supplied": false,
+    "wide_baseline": false,
+    "wide_pose_only": false,
+    "wide_retrieval_max_pairs": 100,
+    "wide_min_frame_gap": 4,
+    "wide_min_similarity": 0.7,
+    "wide_min_inlier_ratio": 0.25,
+    "wide_min_spatial_coverage": 0.25,
+    "wide_min_cycle_matches": 15,
+    "wide_max_pairs_per_image": 1,
+    "wide_retrieval_device": "auto",
+    "wide_retrieval_batch_size": 16
+  },
+  "matching_provenance": "Archived matching_summary.json configuration; missing historical fields expanded with MatchingConfig defaults. Regenerated matches may differ with OpenCV/platform versions."
 }

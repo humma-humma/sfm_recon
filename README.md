@@ -300,6 +300,7 @@ scripts/build_demo_site.py    portable site packaging and media integrity checks
 ## Documentation
 
 - [Complete pipeline, stage map and external setup requirements](docs/PIPELINE.md)
+- [Reproducibility audit: verified rebuilds and remaining gaps](docs/REPRODUCIBILITY_AUDIT.md)
 
 Optional native splatting experiments and measured results: [camera support and depth cleanup](docs/SPLATTING_CPP_RESULTS.md).
 

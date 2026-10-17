@@ -10,8 +10,9 @@ import numpy as np
 from sfm_reconstruction.stage3_splat_temporal_diagnostics import _read_colmap
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA = {'box':'outputs/splat_refresh_v1/colmap/box', 'boot':'outputs/stage2_boot_gaussian_colmap_half',
-        'milk':'outputs/stage2_milk_gaussian_colmap_half', 'scene':'outputs/stage3_gaussian_colmap_stride16_half_stair_rebalanced'}
+DATA = json.loads((ROOT/'configs/splatting/gnt_inputs.json').read_text(encoding='utf-8'))
+if set(DATA) != {'box', 'boot', 'milk', 'scene'} or not all(isinstance(p, str) and p for p in DATA.values()):
+    raise ValueError('gnt_inputs.json must map box, boot, milk and scene to COLMAP dataset directories')
 
 
 def camera_vector(r, t, k):

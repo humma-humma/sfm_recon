@@ -3,11 +3,13 @@ param(
     [string[]]$Datasets=@('box','boot','milk','scene'),
     [string]$TrialRoot=(Join-Path $env:TEMP 'sfm_lightweight_methods_v1'),
     [string]$RenderScratch=(Join-Path $env:TEMP 'sfm_sharpness_trials_v1'),
-    [string]$Python='C:\Users\mopu01\AppData\Local\anaconda3\envs\mardm_open3d\python.exe'
+    [string]$Python='python',
+    [switch]$GNTOnly
 )
 $ErrorActionPreference='Stop'
+if($GNTOnly -and $Stage -ne 'Setup'){throw '-GNTOnly applies to -Stage Setup; it skips the rejected 2DGS dependency build.'}
 $ProjectRoot=Split-Path $PSScriptRoot -Parent
-$Image='ghcr.io/nerfstudio-project/nerfstudio:1.1.5'
+$Image='ghcr.io/nerfstudio-project/nerfstudio@sha256:b59b8e1012d7a43679d3234b3de9c8416a4b8435fcbf21b9d8c4494b8563f19e'
 foreach($Dataset in $Datasets){if($Dataset -notin @('box','boot','milk','scene')){throw "Unknown dataset: $Dataset"}}
 New-Item -ItemType Directory -Force -Path $TrialRoot | Out-Null
 function Check-Exit([string]$Task){if($LASTEXITCODE -ne 0){throw "$Task failed (exit $LASTEXITCODE)"}}
@@ -17,9 +19,9 @@ function Invoke-Trial([string[]]$Command){
 }
 if($Stage -in @('Setup','All')){
     $Repos=@(
-        @{Folder='GNT';Url='https://github.com/VITA-Group/GNT';Commit='53e0fc3d39b4244503d6c4de1e34bbf3199dd2a8'},
-        @{Folder='2dgs';Url='https://github.com/hbb1/2d-gaussian-splatting';Commit='f3e3b9fa67bbd1c75e05167ff37391d8dab2a678'}
+        @{Folder='GNT';Url='https://github.com/VITA-Group/GNT';Commit='53e0fc3d39b4244503d6c4de1e34bbf3199dd2a8'}
     )
+    if(-not $GNTOnly){$Repos+=@{Folder='2dgs';Url='https://github.com/hbb1/2d-gaussian-splatting';Commit='f3e3b9fa67bbd1c75e05167ff37391d8dab2a678'}}
     foreach($Repo in $Repos){
         $Destination=Join-Path $TrialRoot $Repo.Folder
         if(!(Test-Path $Destination)){
@@ -41,6 +43,7 @@ if($Stage -in @('Setup','All')){
     }
     if((Get-Item $Weights).Length -ne 117498781){throw 'Official GNT download has an unexpected size'}
     if((Get-FileHash $Weights -Algorithm SHA256).Hash -ne '3B06CCAD304B0FD70457D9601917E94BF950FEAFC3B7BEEDA230DB4BC579F2EE'){throw 'Official GNT checkpoint SHA256 mismatch'}
+    if(-not $GNTOnly){
     $Packages=Join-Path $TrialRoot 'cuda_packages'
     New-Item -ItemType Directory -Force -Path $Packages | Out-Null
     foreach($Package in @('cuda-nvcc','cuda-cudart-dev','cuda-cccl','cuda-cudart')){
@@ -56,12 +59,13 @@ for package in /trial/cuda_packages/*.tar.bz2; do tar -xjf "$package" -C /tmp/cu
 export CUDA_HOME=/tmp/cuda
 export PATH=/tmp/cuda/bin:$PATH
 export PYTHONPATH=/trial/python_deps
-export TORCH_CUDA_ARCH_LIST=7.5
+export TORCH_CUDA_ARCH_LIST="$(python -c 'import torch; print(".".join(map(str,torch.cuda.get_device_capability())))')"
 export MAX_JOBS=2
 python -m pip install --target /trial/python_deps wheel==0.48.0 ninja==1.13.2
 python -m pip install --no-build-isolation --no-deps --target /trial/python_deps /trial/2dgs/submodules/diff-surfel-rasterization /trial/2dgs/submodules/simple-knn
 '@
     Invoke-Trial -Command @('bash','-c',$Build)
+    }
 }
 if($Stage -in @('GNT','2DGS','All') -and !(Test-Path (Join-Path $RenderScratch 'render_manifest.json'))){throw 'Prior fixed-camera render manifest is required'}
 if($Stage -in @('GNT','All')){

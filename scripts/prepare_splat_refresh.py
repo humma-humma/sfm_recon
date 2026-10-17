@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import argparse
 from dataclasses import replace
 
 from sfm_reconstruction.gaussian_splatting_export import export_colmap_dataset
@@ -25,13 +26,21 @@ def digest(path):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--preset-dir', type=Path, default=ROOT/'configs/presets')
+    parser.add_argument('--datasets', nargs='+', choices=['box', 'boot', 'milk', 'scene'], default=['box', 'boot', 'milk', 'scene'])
+    parser.add_argument('--generate-matches', action='store_true', help='Rebuild Stage 2 matching caches from recorded preset settings')
+    parser.add_argument('--scene-trajectory', type=Path, help='Explicitly reuse a complete frontend; otherwise compute it from the scene preset')
+    args = parser.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     manifest_path = OUT / "manifest.json"
     manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {
         "status": "preparing", "uses_gt_alignment": False, "datasets": {}}
     for name, preset in [("box", "stage1_box_fast"), ("boot", "stage2_boot_fast"),
                          ("milk", "stage2_milk_fast"), ("scene", "stage3_scene")]:
-        preset_path = ROOT / f"configs/presets/{preset}.json"
+        if name not in args.datasets:
+            continue
+        preset_path = (args.preset_dir / f"{preset}.json").resolve()
         if name in manifest["datasets"]:
             assert manifest["datasets"][name]["preset_sha256"] == digest(preset_path)
             print(f"Already prepared: {name}", flush=True)
@@ -40,9 +49,11 @@ def main():
         reconstruction = OUT / "reconstruction" / name
         command = [sys.executable, "scripts/run_preset.py", "--preset", str(preset_path),
                    "--output", str(reconstruction)]
-        if name == "scene":
-            command += ["--trajectory", "outputs/hyperparameter_check/scene_frontend/full_validation/trajectory.txt"]
-        else:
+        if name == "scene" and args.scene_trajectory:
+            command += ["--trajectory", str(args.scene_trajectory.resolve())]
+        if name in ('boot', 'milk') and args.generate_matches:
+            command += ['--generate-matches']
+        if name != 'scene':
             command += ["--rich-cloud"]
         subprocess.run(command, cwd=ROOT, check=True, env=dict(os.environ, PYTHONPATH=str(ROOT / "src")))
         export = OUT / "colmap" / name
@@ -76,7 +87,8 @@ def main():
                  "test": image_names[::8]}
         (export / "split_manifest.json").write_text(json.dumps(split, indent=2))
         manifest["datasets"][name] = {
-            "preset": preset_path.relative_to(ROOT).as_posix(), "preset_sha256": digest(preset_path),
+            "preset": os.path.relpath(preset_path, ROOT).replace(os.sep, '/') if preset_path.drive == ROOT.drive else preset_path.as_posix(),
+            "preset_sha256": digest(preset_path),
             "reconstruction": reconstruction.relative_to(ROOT).as_posix(),
             "colmap": export.relative_to(ROOT).as_posix(), "cameras": len(poses), "seeds": len(seeds),
             "resolution": list(k[4:]), "train_views": len(split["train"]), "test_views": len(split["test"]),

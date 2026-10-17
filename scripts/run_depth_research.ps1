@@ -1,4 +1,4 @@
-param([string]$Python = 'C:\Users\mopu01\AppData\Local\anaconda3\envs\mardm_open3d\python.exe')
+param([string]$Python = 'python')
 $ErrorActionPreference='Stop'
 $RepoRoot=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $RawRoot=(Resolve-Path -LiteralPath (Join-Path $RepoRoot '../Experiments/Stage_3_Data/stage3')).Path
@@ -20,11 +20,11 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'TSDF baseline failed' }
     }
     if (-not (Test-Path -LiteralPath $Checkpoint)) {
-        docker run --rm --pull never --gpus all -v "${RepoRoot}:/workspace" -v "${RepoRoot}/outputs/nerfstudio_cache:/root/.cache" -w /workspace -e PYTHONPATH=/workspace/src ghcr.io/nerfstudio-project/nerfstudio:1.1.5 python scripts/train_depth_research.py
+        docker run --rm --pull never --gpus all -v "${RepoRoot}:/workspace" -v "${RepoRoot}/outputs/nerfstudio_cache:/root/.cache" -w /workspace -e PYTHONPATH=/workspace/src ghcr.io/nerfstudio-project/nerfstudio@sha256:b59b8e1012d7a43679d3234b3de9c8416a4b8435fcbf21b9d8c4494b8563f19e python scripts/train_depth_research.py
         if ($LASTEXITCODE -ne 0) { throw 'Depth training failed' }
     }
     if (-not (Test-Path -LiteralPath 'outputs/depth_research/evaluation/metrics.json')) {
-        docker run --rm --pull never --gpus all -v "${RepoRoot}:/workspace" -v "${RawRoot}:/workspace/raw_scene:ro" -v "${RepoRoot}/outputs/nerfstudio_cache:/root/.cache" -w /workspace -e PYTHONPATH=/workspace/src ghcr.io/nerfstudio-project/nerfstudio:1.1.5 python scripts/evaluate_splat_checkpoint.py --config /workspace/outputs/splat_surroundings_tests/train/scene_control/splatfacto/run_5000/config.yml --checkpoint "/workspace/$Checkpoint" --output /workspace/outputs/depth_research/evaluation --depth-root /workspace/raw_scene/depth
+        docker run --rm --pull never --gpus all -v "${RepoRoot}:/workspace" -v "${RawRoot}:/workspace/raw_scene:ro" -v "${RepoRoot}/outputs/nerfstudio_cache:/root/.cache" -w /workspace -e PYTHONPATH=/workspace/src ghcr.io/nerfstudio-project/nerfstudio@sha256:b59b8e1012d7a43679d3234b3de9c8416a4b8435fcbf21b9d8c4494b8563f19e python scripts/evaluate_splat_checkpoint.py --config /workspace/outputs/splat_surroundings_tests/train/scene_control/splatfacto/run_5000/config.yml --checkpoint "/workspace/$Checkpoint" --output /workspace/outputs/depth_research/evaluation --depth-root /workspace/raw_scene/depth
         if ($LASTEXITCODE -ne 0) { throw 'Depth evaluation failed' }
     }
     & $Python scripts/report_depth_research.py

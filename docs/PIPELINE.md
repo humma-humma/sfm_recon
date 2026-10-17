@@ -34,8 +34,10 @@ The macOS wheel workflow uses a pinned Eigen-only/miniglog Ceres source build
 to avoid bundling conflicting OpenMP runtimes; Linux and Windows use the
 recorded conda Ceres dependency profile.
 
-Presets retain the original dataset and cached-correspondence locations. Copy
-and edit those fields for a different machine before running:
+Presets retain historical paths, but `run_preset.py --dataset` overrides the
+dataset location and `--generate-matches` rebuilds Stage 2 correspondences using
+the recorded matching configuration. See [the current reproduction commands](REPRODUCTION.md#8-current-saved-presets-without-the-authors-directory-layout).
+A basic saved-recipe invocation is:
 
 ```bash
 python scripts/run_preset.py --preset /path/to/local_recipe.json --output outputs/my_run
@@ -49,16 +51,18 @@ those earlier stages first.
 ## Neural stages and external dependencies
 
 GPU training/rendering uses PyTorch, Nerfstudio/gsplat and an NVIDIA CUDA runtime.
-The recorded orchestration scripts use Docker and PowerShell, including the
-`ghcr.io/nerfstudio-project/nerfstudio:1.1.5` image. Many runners use `--pull never`;
+The recorded orchestration scripts use Docker and PowerShell, using the
+immutable image digest recorded in `configs/environments/neural-runtime.json`
+(original Nerfstudio tag `1.1.5`). Many runners use `--pull never`;
 the image must already be present. Review each runner's parameter block before
 launching. Override `Python`, `FFmpeg`, `TrialRoot`, `Destination` and dataset paths
-where available; historical defaults record the original Windows workstation.
+where available; executables default to PATH. Other artifact paths preserve
+the historical stage layout. See the reproduction guide for dependency order.
 
-`scripts/run_lightweight_methods.ps1 -Stage Setup` records and retrieves the
+`scripts/run_lightweight_methods.ps1 -Stage Setup -GNTOnly` records and retrieves the
 upstream GNT checkout at commit `53e0fc3d39b4244503d6c4de1e34bbf3199dd2a8`, its
-official pretrained checkpoint, and the separate 2DGS trial checkout. It also
-sets up dependencies for the historical two-method comparison. Adaptation and
+official pretrained checkpoint, while skipping the unrelated 2DGS trial build. Omit `-GNTOnly` for the
+historical two-method setup. Adaptation and
 final rendering require the earlier fixed-camera exports/manifests described in
 the stage reports. The upstream GNT and 2DGS code, datasets and model weights
 are not vendored; their licenses and terms apply. The small BasicSR architecture

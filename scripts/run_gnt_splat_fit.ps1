@@ -1,8 +1,8 @@
 param(
     [string]$Destination=(Join-Path $env:USERPROFILE 'sfm_reconstruction_artifacts/gnt_finalization'),
     [string]$Original=(Join-Path $env:USERPROFILE 'sfm_reconstruction_artifacts/gnt_traversal_control6000_960'),
-    [string]$Python='C:\Users\mopu01\AppData\Local\anaconda3\envs\mardm_open3d\python.exe',
-    [string]$FFmpeg='C:\ffmpeg\bin\ffmpeg.exe'
+    [string]$Python='python',
+    [string]$FFmpeg='ffmpeg'
 )
 $ErrorActionPreference='Stop'
 # Windows PowerShell treats native stderr warnings as errors under Stop.
@@ -24,7 +24,7 @@ if($Running){
     $Code=& docker wait sfm-gnt-splat-fit
     if($LASTEXITCODE -ne 0 -or $Code -ne '0'){throw 'The initial mixed fit did not complete successfully; inspect its log before resuming.'}
 }
-$DockerArgs=@('run','--rm','--pull','never','--gpus','all','--name','sfm-gnt-splat-fit','-v',"${ProjectRoot}:/workspace:ro",'-v',"${Destination}:/finalization",'-v',"${Original}:/original:ro",'-w','/workspace','-e','PYTHONPATH=/workspace/src','-e','TORCH_HOME=/workspace/outputs/nerfstudio_cache/torch','ghcr.io/nerfstudio-project/nerfstudio:1.1.5')
+$DockerArgs=@('run','--rm','--pull','never','--gpus','all','--name','sfm-gnt-splat-fit','-v',"${ProjectRoot}:/workspace:ro",'-v',"${Destination}:/finalization",'-v',"${Original}:/original:ro",'-w','/workspace','-e','PYTHONPATH=/workspace/src','-e','TORCH_HOME=/workspace/outputs/nerfstudio_cache/torch','ghcr.io/nerfstudio-project/nerfstudio@sha256:b59b8e1012d7a43679d3234b3de9c8416a4b8435fcbf21b9d8c4494b8563f19e')
 $Logs=Join-Path $Destination 'gnt_splat_scene/logs';New-Item -ItemType Directory -Force -Path $Logs | Out-Null
 foreach($Arm in @('mixed','photos')){
     Invoke-DockerLog -Arguments ($DockerArgs+@('python','scripts/train_gnt_splat.py','--root','/finalization','--arm',$Arm)) -Log (Join-Path $Logs "train_$Arm.log")

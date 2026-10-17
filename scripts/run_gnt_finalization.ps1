@@ -3,8 +3,8 @@ param(
     [switch]$FullFlow,
     [string]$TrialRoot=(Join-Path $env:TEMP 'sfm_lightweight_methods_v1'),
     [string]$RenderScratch=(Join-Path $env:TEMP 'sfm_sharpness_trials_v1'),
-    [string]$Python='C:\Users\mopu01\AppData\Local\anaconda3\envs\mardm_open3d\python.exe',
-    [string]$FFmpeg='C:\ffmpeg\bin\ffmpeg.exe'
+    [string]$Python='python',
+    [string]$FFmpeg='ffmpeg'
 )
 $ErrorActionPreference='Stop'
 $ProjectRoot=Split-Path $PSScriptRoot -Parent
@@ -21,14 +21,14 @@ if($Stage -in @('All','Runtime')){
     $Completed=$false
     if(Test-Path -LiteralPath $RuntimePath){$Runtime=Get-Content -Raw $RuntimePath | ConvertFrom-Json;$Completed=$Runtime.status -eq 'complete'}
     if(-not $Completed -or $Stage -eq 'Runtime'){
-        & docker run --rm --pull never --gpus all --name sfm-gnt-runtime -v "${ProjectRoot}:/workspace:ro" -v "${TrialRoot}:/trial" -w /workspace -e PYTHONPATH=/workspace/src:/trial/python_deps ghcr.io/nerfstudio-project/nerfstudio:1.1.5 python scripts/benchmark_gnt_runtime.py --trial /trial
+        & docker run --rm --pull never --gpus all --name sfm-gnt-runtime -v "${ProjectRoot}:/workspace:ro" -v "${TrialRoot}:/trial" -w /workspace -e PYTHONPATH=/workspace/src:/trial/python_deps ghcr.io/nerfstudio-project/nerfstudio@sha256:b59b8e1012d7a43679d3234b3de9c8416a4b8435fcbf21b9d8c4494b8563f19e python scripts/benchmark_gnt_runtime.py --trial /trial
         if($LASTEXITCODE -ne 0){throw 'GNT runtime benchmark failed'}
     }
 }
 if($Stage -in @('All','Compile')){
     $CompilePath=Join-Path $TrialRoot 'gnt_finalization/compile.json'
     if($Stage -eq 'Compile' -or -not (Test-Path -LiteralPath $CompilePath)){
-        & docker run --rm --pull never --gpus all --name sfm-gnt-compile -v "${ProjectRoot}:/workspace:ro" -v "${TrialRoot}:/trial" -w /workspace -e PYTHONPATH=/workspace/src:/trial/python_deps ghcr.io/nerfstudio-project/nerfstudio:1.1.5 python scripts/benchmark_gnt_compile.py --trial /trial
+        & docker run --rm --pull never --gpus all --name sfm-gnt-compile -v "${ProjectRoot}:/workspace:ro" -v "${TrialRoot}:/trial" -w /workspace -e PYTHONPATH=/workspace/src:/trial/python_deps ghcr.io/nerfstudio-project/nerfstudio@sha256:b59b8e1012d7a43679d3234b3de9c8416a4b8435fcbf21b9d8c4494b8563f19e python scripts/benchmark_gnt_compile.py --trial /trial
         if($LASTEXITCODE -ne 0){throw 'Compiler benchmark failed before recording a result'}
     }
 }
@@ -39,7 +39,7 @@ if($Stage -in @('All','Objects')){
     Copy-Item -LiteralPath $RuntimePath -Destination (Join-Path $ProjectRoot 'outputs/gnt_finalization/runtime.json')
     if(Test-Path (Join-Path $TrialRoot 'gnt_finalization/compile.json')){Copy-Item -LiteralPath (Join-Path $TrialRoot 'gnt_finalization/compile.json') -Destination (Join-Path $ProjectRoot 'outputs/gnt_finalization/compile.json')}
     foreach($Dataset in @('box','boot','milk')){
-        & docker run --rm --pull never --gpus all --name sfm-gnt-objects -v "${ProjectRoot}:/workspace:ro" -v "${TrialRoot}:/trial" -v "${RenderScratch}:/render_scratch:ro" -w /workspace -e PYTHONPATH=/workspace/src:/trial/python_deps ghcr.io/nerfstudio-project/nerfstudio:1.1.5 python scripts/adapt_gnt_objects.py --trial /trial --render-scratch /render_scratch --dataset $Dataset
+        & docker run --rm --pull never --gpus all --name sfm-gnt-objects -v "${ProjectRoot}:/workspace:ro" -v "${TrialRoot}:/trial" -v "${RenderScratch}:/render_scratch:ro" -w /workspace -e PYTHONPATH=/workspace/src:/trial/python_deps ghcr.io/nerfstudio-project/nerfstudio@sha256:b59b8e1012d7a43679d3234b3de9c8416a4b8435fcbf21b9d8c4494b8563f19e python scripts/adapt_gnt_objects.py --trial /trial --render-scratch /render_scratch --dataset $Dataset
         if($LASTEXITCODE -ne 0){throw "GNT object phase failed: $Dataset. Saved checkpoints and frames remain available for resuming."}
         $env:PYTHONPATH=Join-Path $ProjectRoot 'src'
         & $Python (Join-Path $PSScriptRoot 'publish_gnt_objects.py') --trial $TrialRoot --destination $Destination

@@ -9,7 +9,7 @@ docker run --rm --gpus all `
     -v "${RepoRoot}:/workspace" `
     -v "${RepoRoot}/outputs/nerfstudio_cache:/root/.cache" `
     -w /workspace `
-    ghcr.io/nerfstudio-project/nerfstudio:1.1.5 `
+    ghcr.io/nerfstudio-project/nerfstudio@sha256:b59b8e1012d7a43679d3234b3de9c8416a4b8435fcbf21b9d8c4494b8563f19e `
     python scripts/render_splat_closeups_cuda.py
 if ($LASTEXITCODE -ne 0) { throw 'Native close-up rendering failed. See outputs/splat_closeups/native_report.json.' }
 Write-Host 'Open outputs/splat_closeups/native.html to compare all four datasets.'

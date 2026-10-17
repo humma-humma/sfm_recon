@@ -1,0 +1,6 @@
+{
+  "box": "outputs/splat_refresh_v1/colmap/box",
+  "boot": "outputs/stage2_boot_gaussian_colmap_half",
+  "milk": "outputs/stage2_milk_gaussian_colmap_half",
+  "scene": "outputs/stage3_gaussian_colmap_stride16_half_stair_rebalanced"
+}

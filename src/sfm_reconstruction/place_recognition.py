@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import os
 
 import numpy as np
 
@@ -143,7 +144,9 @@ class DinoV2Retriever:
             ]
         )
         self._model = torch.hub.load(
-            "facebookresearch/dinov2", "dinov2_vits14", trust_repo=True
+            "facebookresearch/dinov2" + (":" + os.environ['SFM_DINOV2_REF']
+                                        if os.environ.get('SFM_DINOV2_REF') else ""),
+            "dinov2_vits14", trust_repo=True
         ).eval().to(device)
 
     def describe(self, image_paths: list[str | Path]) -> np.ndarray:

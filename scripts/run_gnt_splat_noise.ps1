@@ -1,8 +1,8 @@
 param(
     [string]$Destination=(Join-Path $env:USERPROFILE 'sfm_reconstruction_artifacts/gnt_finalization'),
     [string]$Original=(Join-Path $env:USERPROFILE 'sfm_reconstruction_artifacts/gnt_traversal_control6000_960'),
-    [string]$Python='C:\Users\mopu01\AppData\Local\anaconda3\envs\mardm_open3d\python.exe',
-    [string]$FFmpeg='C:\ffmpeg\bin\ffmpeg.exe'
+    [string]$Python='python',
+    [string]$FFmpeg='ffmpeg'
 )
 $ErrorActionPreference='Stop'
 $ProjectRoot=Split-Path $PSScriptRoot -Parent
@@ -13,7 +13,7 @@ function Invoke-NoiseDocker {
     & docker @DockerArgs @TaskArgs *> $Log
     if($LASTEXITCODE -ne 0){throw "Docker exited $LASTEXITCODE. Check $Log"}
 }
-$DockerArgs=@('run','--rm','--pull','never','--gpus','all','--name','sfm-gnt-splat-noise','-v',"${ProjectRoot}:/workspace:ro",'-v',"${Destination}:/finalization",'-v',"${Original}:/original:ro",'-w','/workspace','-e','PYTHONPATH=/workspace/src','-e','TORCH_HOME=/workspace/outputs/nerfstudio_cache/torch','ghcr.io/nerfstudio-project/nerfstudio:1.1.5')
+$DockerArgs=@('run','--rm','--pull','never','--gpus','all','--name','sfm-gnt-splat-noise','-v',"${ProjectRoot}:/workspace:ro",'-v',"${Destination}:/finalization",'-v',"${Original}:/original:ro",'-w','/workspace','-e','PYTHONPATH=/workspace/src','-e','TORCH_HOME=/workspace/outputs/nerfstudio_cache/torch','ghcr.io/nerfstudio-project/nerfstudio@sha256:b59b8e1012d7a43679d3234b3de9c8416a4b8435fcbf21b9d8c4494b8563f19e')
 $Running=& docker ps --filter 'name=^sfm-gnt-splat-fit$' --format '{{.Names}}'
 if($Running){
     $Code=& docker wait sfm-gnt-splat-fit

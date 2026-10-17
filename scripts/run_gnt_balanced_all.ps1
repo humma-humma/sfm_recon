@@ -1,7 +1,7 @@
 param(
     [string]$Destination=(Join-Path $env:USERPROFILE 'sfm_reconstruction_artifacts/gnt_finalization'),
     [string]$TrialRoot=(Join-Path $env:TEMP 'sfm_lightweight_methods_v1'),
-    [string]$Python='C:\Users\mopu01\AppData\Local\anaconda3\envs\mardm_open3d\python.exe'
+    [string]$Python='python'
 )
 $ErrorActionPreference='Stop'
 $ProjectRoot=Split-Path $PSScriptRoot -Parent
@@ -21,7 +21,7 @@ function Invoke-Gpu([string]$Dataset,[string]$Phase,[string[]]$PythonArgs){
     $Log=Join-Path $Logs "${Dataset}_${Phase}.log"
     Write-Host "Starting $Dataset / $Phase; log: $Log"
     $ErrorActionPreference='Continue'
-    & docker run --rm --pull never --gpus all --name "sfm-balanced-all-${Dataset}-${Phase}" -v "${ProjectRoot}:/workspace:ro" -v "${Destination}:/finalization" -v "${TrialRoot}:/trial" -w /workspace -e PYTHONPATH=/workspace/src:/trial/python_deps -e TORCH_HOME=/workspace/outputs/nerfstudio_cache/torch ghcr.io/nerfstudio-project/nerfstudio:1.1.5 python @PythonArgs *> $Log
+    & docker run --rm --pull never --gpus all --name "sfm-balanced-all-${Dataset}-${Phase}" -v "${ProjectRoot}:/workspace:ro" -v "${Destination}:/finalization" -v "${TrialRoot}:/trial" -w /workspace -e PYTHONPATH=/workspace/src:/trial/python_deps -e TORCH_HOME=/workspace/outputs/nerfstudio_cache/torch ghcr.io/nerfstudio-project/nerfstudio@sha256:b59b8e1012d7a43679d3234b3de9c8416a4b8435fcbf21b9d8c4494b8563f19e python @PythonArgs *> $Log
     $Code=$LASTEXITCODE
     $ErrorActionPreference='Stop'
     if($Code -ne 0){throw "$Dataset / $Phase exited $Code. See $Log"}

@@ -1,0 +1,23 @@
+{
+  "image": "ghcr.io/nerfstudio-project/nerfstudio@sha256:b59b8e1012d7a43679d3234b3de9c8416a4b8435fcbf21b9d8c4494b8563f19e",
+  "original_tag": "ghcr.io/nerfstudio-project/nerfstudio:1.1.5",
+  "platform": "linux/amd64",
+  "observed_python": "3.10.12",
+  "observed_packages": {
+    "torch": "2.1.2+cu118",
+    "numpy": "1.26.4",
+    "scipy": "1.14.1",
+    "opencv-python": "4.10.0.84",
+    "gsplat": "1.4.0",
+    "nerfstudio": "1.1.5",
+    "configargparse": "1.7",
+    "imageio": "2.36.0",
+    "scikit-image": "0.24.0"
+  },
+  "gnt": {
+    "url": "https://github.com/VITA-Group/GNT",
+    "commit": "53e0fc3d39b4244503d6c4de1e34bbf3199dd2a8",
+    "checkpoint_sha256": "3b06ccad304b0fd70457d9601917e94bf950feafc3b7beeda230db4bc579f2ee"
+  },
+  "note": "Observed base image, not a lock for later pip installs or upstream checkpoints. Host GPU driver and machine differences can affect results."
+}

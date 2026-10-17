@@ -1,0 +1,26 @@
+{
+  "case": "milk native preset with regenerated matching cache",
+  "preset": "configs/presets/stage2_milk_fast.json",
+  "cameras": 50,
+  "points": 1745,
+  "reconstruction_call_seconds": 9.482440700288862,
+  "correspondence_files_byte_identical_to_archived_cache": true,
+  "correspondence_tree_sha256": "a80cb18d7ec7b7163628a9c5ef28fa99eadd1ca00c83ac141f3123d772dddf61",
+  "observed_cpu_versions": {
+    "sfm-reconstruction": "1.0.1",
+    "numpy": "1.23.5",
+    "scipy": "1.15.3",
+    "opencv-python": "4.12.0.88",
+    "torch": "2.8.0+cu126"
+  },
+  "scope": "Same workstation and supplied dataset, new output/cache. Matching generation time excluded from reconstruction_call_seconds. Does not establish cross-platform equality or a complete neural training rebuild.",
+  "compatible_version_check": {
+    "numpy": "2.2.6",
+    "opencv-python": "4.12.0.88",
+    "seconds": 9.274951200000942,
+    "cameras": 50,
+    "points": 1745,
+    "correspondence_files_byte_identical_to_first_run": true,
+    "scope": "Project-local pip target overlay on the same Conda Python/workstation, not a clean environment. No installed host packages changed."
+  }
+}

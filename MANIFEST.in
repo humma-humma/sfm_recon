@@ -36,3 +36,6 @@ include docs/HYPERPARAMETER_CHECK.md
 include docs/CPP_INTEGRATION.md
 include docs/CPP_RESULTS.md
 include docs/CERES_RESULTS.md
+recursive-include configs/environments *.json *.txt
+include docs/PIPELINE.md
+include docs/REPRODUCIBILITY_AUDIT.md

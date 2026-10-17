@@ -1,5 +1,5 @@
 param(
-    [string]$Python = 'C:\Users\mopu01\AppData\Local\anaconda3\envs\mardm_open3d\python.exe',
+    [string]$Python = 'python',
     [string]$Scratch = (Join-Path $env:TEMP 'sfm_sharpness_trials_v1')
 )
 $ErrorActionPreference = 'Stop'
@@ -14,11 +14,11 @@ try {
     }
     $Expected = '49FAFD45F8FD7AA8D31AB2A22D14D91B536C34494A5CFE31EB5D89C2FA266ABB'
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $Weights).Hash -ne $Expected) { throw 'Unexpected pretrained weight contents.' }
-    docker run --rm --pull never --gpus all -v "${RepoRoot}:/workspace" -v "${Scratch}:/scratch" -v "${RepoRoot}/outputs/nerfstudio_cache:/root/.cache" -w /workspace -e PYTHONPATH=/workspace/src ghcr.io/nerfstudio-project/nerfstudio:1.1.5 python scripts/render_sharpness_trials.py --scratch /scratch
+    docker run --rm --pull never --gpus all -v "${RepoRoot}:/workspace" -v "${Scratch}:/scratch" -v "${RepoRoot}/outputs/nerfstudio_cache:/root/.cache" -w /workspace -e PYTHONPATH=/workspace/src ghcr.io/nerfstudio-project/nerfstudio@sha256:b59b8e1012d7a43679d3234b3de9c8416a4b8435fcbf21b9d8c4494b8563f19e python scripts/render_sharpness_trials.py --scratch /scratch
     if ($LASTEXITCODE -ne 0) { throw 'Fixed-checkpoint rendering failed.' }
     & $Python scripts/evaluate_sharpness_trials.py --scratch $Scratch
     if ($LASTEXITCODE -ne 0) { throw 'Sharpness evaluation failed.' }
-    docker run --rm --pull never --gpus all -v "${RepoRoot}:/workspace" -v "${RepoRoot}/outputs/nerfstudio_cache:/root/.cache" -w /workspace ghcr.io/nerfstudio-project/nerfstudio:1.1.5 python scripts/score_sharpness_perceptual.py
+    docker run --rm --pull never --gpus all -v "${RepoRoot}:/workspace" -v "${RepoRoot}/outputs/nerfstudio_cache:/root/.cache" -w /workspace ghcr.io/nerfstudio-project/nerfstudio@sha256:b59b8e1012d7a43679d3234b3de9c8416a4b8435fcbf21b9d8c4494b8563f19e python scripts/score_sharpness_perceptual.py
     if ($LASTEXITCODE -ne 0) { throw 'Perceptual scoring failed.' }
     & $Python -c "import sys,json; from pathlib import Path; sys.path.insert(0,'scripts'); from evaluate_sharpness_trials import build_page; build_page(json.loads(Path('outputs/sharpness_trials/results.json').read_text()))"
     if ($LASTEXITCODE -ne 0) { throw 'Comparison page generation failed.' }

@@ -1,6 +1,6 @@
 param(
     [string]$Destination=(Join-Path $env:USERPROFILE 'sfm_reconstruction_artifacts/gnt_finalization'),
-    [string]$Python='C:\Users\mopu01\AppData\Local\anaconda3\envs\mardm_open3d\python.exe'
+    [string]$Python='python'
 )
 $ErrorActionPreference='Stop'
 $Output=Join-Path $Destination 'assets/scene15_splat'
