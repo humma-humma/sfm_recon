@@ -22,7 +22,7 @@ def test_patch_is_contiguous_in_image_coordinates(loss_module):
 
 
 def test_structural_loss_zero_for_identical_patch_and_detects_blur(loss_module):
-    import torch
+    torch = pytest.importorskip("torch")
     torch.set_num_threads(2)
     # A step edge gives a reference with structure rather than random texture.
     target = torch.zeros(16,16,3);target[:,8:]=1.

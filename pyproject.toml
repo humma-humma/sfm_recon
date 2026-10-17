@@ -38,6 +38,7 @@ dev = ["pytest>=8", "build>=1.2"]
 evaluation = [
     "trimesh>=3.23",
     "rtree>=1.0",
+    "scikit-image>=0.21",
 ]
 visualization = ["matplotlib>=3.7"]
 open3d = ["open3d>=0.19"]

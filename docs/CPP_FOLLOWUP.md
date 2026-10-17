@@ -131,6 +131,15 @@ Set `SFM_CMAKE` if cmake is not on PATH. `PYBIND11_INCLUDE_DIR` can supply exist
 
 ## Local validation
 
+Publication follow-up (2026-10-17): native source, bindings, build scripts,
+presets and these reports are now included in Git. The hosted macOS wheel uses
+a pinned Ceres 2.2 source build with Eigen sparse support and miniglog, without
+SuiteSparse/LAPACK/OpenMP dependencies. This avoids the duplicate OpenMP runtime
+abort observed with the initial repaired conda Ceres wheel. Linux and Windows
+continue to use the conda Ceres dependency profile. The original benchmark
+measurements above are unchanged; they are not macOS performance claims.
+The JSON below preserves the earlier local validation record.
+
 ```json
 {
   "source_tests": "160 passed in 11.39 s",

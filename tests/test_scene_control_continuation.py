@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-import torch
+torch = pytest.importorskip("torch")
 
 
 def module():

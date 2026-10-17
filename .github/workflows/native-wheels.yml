@@ -33,16 +33,44 @@ jobs:
           channel-priority: strict
       - name: Install build and solver dependencies
         run: |
-          conda install --yes --override-channels -c conda-forge 'ceres-solver=2.2.0' eigen cmake pybind11 'setuptools>=77' wheel
+          if [ "$RUNNER_OS" = macOS ]; then
+            conda install --yes --override-channels -c conda-forge 'eigen>=3.4,<5' cmake pybind11 'setuptools>=77' wheel
+          else
+            conda install --yes --override-channels -c conda-forge 'ceres-solver=2.2.0' eigen cmake pybind11 'setuptools>=77' wheel
+          fi
           python -m pip install build pytest numpy scipy opencv-python
-          python scripts/collect_native_licenses.py --prefix "$CONDA_PREFIX"
+      - name: Build macOS Ceres without transitive OpenMP runtimes
+        if: runner.os == 'macOS'
+        run: |
+          git clone --depth 1 --branch 2.2.0 https://github.com/ceres-solver/ceres-solver.git "$RUNNER_TEMP/ceres-source"
+          test "$(git -C "$RUNNER_TEMP/ceres-source" rev-parse HEAD)" = 85331393dc0dff09f6fb9903ab0c4bfa3e134b01
+          cmake -S "$RUNNER_TEMP/ceres-source" -B "$RUNNER_TEMP/ceres-build" \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/ceres-eigen" -DCMAKE_PREFIX_PATH="$CONDA_PREFIX" \
+            -DMINIGLOG=ON -DGFLAGS=OFF -DSUITESPARSE=OFF -DLAPACK=OFF \
+            -DACCELERATESPARSE=OFF -DEIGENSPARSE=ON -DEIGENMETIS=OFF -DUSE_CUDA=OFF \
+            -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARKS=OFF \
+            -DSCHUR_SPECIALIZATIONS=OFF -DBUILD_SHARED_LIBS=OFF
+          cmake --build "$RUNNER_TEMP/ceres-build" --parallel 3
+          cmake --install "$RUNNER_TEMP/ceres-build"
+      - name: Collect dependency licenses
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            python scripts/collect_native_licenses.py --prefix "$CONDA_PREFIX" --ceres-source "$RUNNER_TEMP/ceres-source"
+          else
+            python scripts/collect_native_licenses.py --prefix "$CONDA_PREFIX"
+          fi
       - name: Build platform wheel
         env:
           SFM_BUILD_NATIVE: '1'
           SFM_WITH_CERES: '1'
         run: |
           export SFM_CERES_PREFIX="$CONDA_PREFIX"
-          if [ "$RUNNER_OS" = macOS ]; then export MACOSX_DEPLOYMENT_TARGET=14.0; fi
+          if [ "$RUNNER_OS" = macOS ]; then
+            export MACOSX_DEPLOYMENT_TARGET=14.0
+            export SFM_CERES_PREFIX="$RUNNER_TEMP/ceres-eigen"
+            export CMAKE_PREFIX_PATH="$CONDA_PREFIX"
+          fi
           python -m build --wheel --no-isolation
       - name: Repair Linux dependencies
         if: runner.os == 'Linux'

@@ -30,6 +30,9 @@ building and testing native extensions. C++17, CMake, pybind11 headers and optio
 Ceres 2.2/Eigen dependencies are documented in [CPP_INTEGRATION.md](CPP_INTEGRATION.md).
 Python remains the default. Fast presets explicitly select native backends and
 therefore require their corresponding extensions.
+The macOS wheel workflow uses a pinned Eigen-only/miniglog Ceres source build
+to avoid bundling conflicting OpenMP runtimes; Linux and Windows use the
+recorded conda Ceres dependency profile.
 
 Presets retain the original dataset and cached-correspondence locations. Copy
 and edit those fields for a different machine before running:

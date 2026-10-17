@@ -1,13 +1,16 @@
-"""Preserve conda dependency license texts and provenance before wheel repair."""
+"""Preserve native dependency licenses and provenance before wheel repair."""
 import argparse
 import json
 from pathlib import Path
 import shutil
+import subprocess
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--prefix", type=Path, required=True)
+    parser.add_argument("--ceres-source", type=Path,
+        help="Pinned source tree for an Eigen-only/miniglog Ceres build")
     parser.add_argument("--pybind-license", type=Path,
         help="License bundle for a non-conda pybind11 header provider (for example PyTorch)")
     args = parser.parse_args()
@@ -15,7 +18,10 @@ def main():
         for r in [json.loads(p.read_text())]}
     destination = Path(__file__).resolve().parents[1]/"src/sfm_reconstruction/_third_party_licenses"
     destination.mkdir(exist_ok=True)
-    pending, seen, notices = ["ceres-solver", "eigen", "pybind11"], set(), []
+    pending = ["eigen", "pybind11"]
+    if not args.ceres_source:
+        pending.append("ceres-solver")
+    seen, notices = set(), []
     while pending:
         name = pending.pop()
         if name in seen or name not in records:
@@ -35,6 +41,15 @@ def main():
         notices.append({"name": name, "version": record["version"],
             "build": record["build"], "license": record.get("license"),
             "package_url": record.get("url"), "license_files": copied})
+    if args.ceres_source:
+        target = destination/"ceres-solver/LICENSE"
+        target.parent.mkdir(exist_ok=True)
+        shutil.copyfile(args.ceres_source/"LICENSE", target)
+        commit = subprocess.check_output(
+            ["git", "-C", str(args.ceres_source), "rev-parse", "HEAD"], text=True).strip()
+        notices.append({"name":"ceres-solver", "version":"2.2.0",
+            "build":"source-eigen-miniglog", "commit":commit,
+            "license_files":[target.relative_to(destination).as_posix()]})
     if args.pybind_license:
         target = destination/"pybind11-header-provider/LICENSE"
         target.parent.mkdir(exist_ok=True)
