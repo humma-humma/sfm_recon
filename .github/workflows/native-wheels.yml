@@ -99,7 +99,7 @@ jobs:
           unset PYTHONPATH SFM_CERES_DLL_DIR LD_LIBRARY_PATH DYLD_LIBRARY_PATH
           "$PY" -c "from sfm_reconstruction.native_backend import load_native, load_ceres; load_native(); print(load_ceres().version)"
           "$PY" -m pytest test_native_backend.py test_ceres_backend.py test_splat_native.py -q
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: native-${{ matrix.os }}-py${{ matrix.python }}
           path: wheelhouse/*.whl
